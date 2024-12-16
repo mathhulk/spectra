@@ -4,24 +4,39 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.graalvm.polyglot.Context;
 
 public class Script {
-    private final Context context;
-    private final String source;
+    private Boolean enabled = false;
 
-    private final EventListenerManager eventListenerManager;
-    private final CommandManager commandManager;
-    private final TaskManager taskManager;
+    private Context context;
+    private EventListenerManager eventListenerManager;
+    private CommandManager commandManager;
+    private TaskManager taskManager;
 
     private final String name;
     private final JavaPlugin plugin;
+    private final String source;
 
     public Script(String name, String source, JavaPlugin plugin) {
         this.source = source;
         this.plugin = plugin;
         this.name = name;
+    }
 
-        // Initialize the GraalJS context
+    public String getName() {
+        return name;
+    }
+
+    public JavaPlugin getPlugin() {
+        return plugin;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void enable() {
+        if (enabled) return;
+
         context = Context.newBuilder("js")
-                // Allow Java access
                 .allowAllAccess(true)
                 .build();
 
@@ -44,28 +59,21 @@ public class Script {
 
         context.getBindings("js").putMember("setTimeout", (TaskManager.SetTimeoutFunction) taskManager::setTimeout);
         context.getBindings("js").putMember("clearTimeout", (TaskManager.ClearTimeoutFunction) taskManager::clearTimeout);
-    }
 
-    public String getName() {
-        return name;
-    }
 
-    public JavaPlugin getPlugin() {
-        return plugin;
-    }
-
-    public String getSource() {
-        return source;
-    }
-
-    public void execute() {
         context.eval("js", this.source);
+
+        enabled = true;
     }
 
-    public void close() {
+    public void disable() {
+        if (!enabled) return;
+
         taskManager.removeTasks();
         eventListenerManager.removeEventListeners();
         commandManager.removeCommands();
         context.close();
+
+        enabled = false;
     }
 }

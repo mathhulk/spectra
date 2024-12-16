@@ -3,8 +3,8 @@ package com.mathhulk.spigotscript;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,56 +13,120 @@ public class ScriptManager {
 
     private final Map<String, Script> scripts = new HashMap<>();
 
+    private Boolean watching = false;
+    private Thread thread;
+
     public ScriptManager(JavaPlugin plugin) {
         this.plugin = plugin;
     }
 
-    public void initialize() {
-        File scriptsFolder = new File(plugin.getDataFolder(), "scripts");
+    public Script addScript(String name, Boolean enable) {
+        Script existingScript = scripts.get(name);
+        if (existingScript != null) return null;
 
-        // Load all .js files in the scripts folder
-        File[] files = scriptsFolder.listFiles((dir, name) -> name.endsWith(".js"));
-        if (files == null) {
-            plugin.getLogger().warning("No scripts found in folder: " + scriptsFolder.getAbsolutePath());
-            return;
+        File file = new File(plugin.getDataFolder(), "scripts/" + name + ".js");
+
+        if (!file.exists()) {
+            plugin.getLogger().info("Script does not exist: " + name);
+
+            return null;
         }
 
-        for (File file : files) {
-            String name = file.getName();
+        try {
+            String source = Files.readString(file.toPath());
 
-            try {
-                plugin.getLogger().info("Loading script: " + name);
+            Script script = new Script(name, source, plugin);
+            if (enable) script.enable();
 
-                String source = Files.readString(file.toPath());
+            scripts.put(name, script);
 
-                Script script = new Script(name, source, plugin);
-                script.execute();
+            plugin.getLogger().info("Added script: " + name);
 
-                plugin.getLogger().info("Successfully executed script: " + name);
+            return script;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to add script: " + name);
 
-                this.scripts.put(name, script);
-            } catch (IOException e) {
-                plugin.getLogger().severe("Failed to read script: " + name);
+            e.printStackTrace();
 
-                e.printStackTrace();
-            } catch (Exception e) {
-                plugin.getLogger().severe("Failed to execute script: " + name);
+            return null;
+        }
+    }
 
-                e.printStackTrace();
+    public Boolean isWatching() {
+        return watching;
+    }
+
+    public void enableScript(String name) {
+        Script script = scripts.get(name);
+        if (script == null) return;
+
+        script.enable();
+    }
+
+    public void disableScript(String name) {
+        Script script = scripts.get(name);
+        if (script == null) return;
+
+        script.disable();
+    }
+
+    public void removeScript(String name) {
+        Script script = scripts.get(name);
+        if (script == null) return;
+
+        script.disable();
+        scripts.remove(name);
+    }
+
+    public Script getScript(String name) {
+        return scripts.get(name);
+    }
+
+    public ArrayList<Script> getScripts() {
+        return new ArrayList<>(scripts.values());
+    }
+
+    public void enable(Boolean watch) {
+        File scriptsFolder = new File(plugin.getDataFolder(), "scripts");
+        File[] files = scriptsFolder.listFiles((_, name) -> name.endsWith(".js"));
+
+        if (files != null) {
+            for (File file : files) {
+                String name = file.getName().substring(0, file.getName().length() - 3);
+
+                addScript(name, true);
             }
         }
 
-        // Watch the scripts folder for changes in a separate thread
-        new Thread(() -> {
+        if (!watch) return;
+
+        startWatching();
+    }
+
+    public void stopWatching() {
+        if (!watching) return;
+
+        watching = false;
+
+        thread.interrupt();
+
+        plugin.getLogger().info("Stopped watching for scripts");
+    }
+
+    public void startWatching() {
+        thread = new Thread(() -> {
             try {
-                WatchService watchService = FileSystems.getDefault().newWatchService();
+                watching = true;
+
+                File scriptsFolder = new File(plugin.getDataFolder(), "scripts");
                 Path folderPath = scriptsFolder.toPath();
 
-                // Register the folder for create, modify, and delete events
-                folderPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
-                        StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+                WatchService watchService = FileSystems.getDefault().newWatchService();
+                folderPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
 
-                while (true) {
+                plugin.getLogger().info("Started watching for scripts");
+
+                while (watching) {
                     WatchKey key = watchService.take();
 
                     for (WatchEvent<?> event : key.pollEvents()) {
@@ -70,85 +134,46 @@ public class ScriptManager {
                         Path filePath = folderPath.resolve((Path) event.context());
                         File file = filePath.toFile();
 
-                        try {
+                        String fileName = file.getName();
 
-                            // Add a new script
-                            if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
-                                String name = file.getName();
+                        if (!fileName.endsWith(".js")) {
+                            continue;
+                        }
 
-                                if (!name.endsWith(".js")) {
-                                    continue;
-                                }
+                        String name = fileName.substring(0, fileName.length() - 3);
 
-                                String source = Files.readString(file.toPath());
+                        if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
+                            addScript(name, true);
+                        }
 
-                                Script script = new Script(name, source, plugin);
-                                script.execute();
+                        if (kind == StandardWatchEventKinds.ENTRY_MODIFY) {
+                            removeScript(name);
+                            addScript(name, true);
+                        }
 
-                                this.scripts.put(name, script);
-
-                                plugin.getLogger().info("Script added: " + name);
-
-                                // Modify an existing script
-                            } else if (kind == StandardWatchEventKinds.ENTRY_MODIFY) {
-                                String name = file.getName();
-
-                                if (!name.endsWith(".js")) {
-                                    continue;
-                                }
-
-                                // Close the current script
-                                Script script = this.scripts.get(file.getName());
-
-                                if (script != null) {
-                                    script.close();
-                                }
-
-                                String source = Files.readString(file.toPath());
-
-                                script = new Script(name, source, plugin);
-                                script.execute();
-
-                                this.scripts.put(name, script);
-
-                                plugin.getLogger().info("Script modified: " + name);
-
-                                // Remove a script
-                            } else if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
-                                String name = file.getName();
-
-                                if (!name.endsWith(".js")) {
-                                    continue;
-                                }
-
-                                Script script = this.scripts.get(name);
-
-                                if (script != null) {
-                                    script.close();
-                                }
-
-                                this.scripts.remove(name);
-
-                                plugin.getLogger().info("Script deleted: " + name);
-                            }
-                        } catch (Exception e) {
-                            plugin.getLogger().severe("Failed to handle event: " + kind.name());
-
-                            e.printStackTrace();
+                        if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+                            removeScript(name);
                         }
                     }
 
-                    key.reset(); // Reset the key to continue listening
+                    key.reset();
                 }
-            } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                plugin.getLogger().warning("Stopped watching for scripts");
+
+                watching = false;
             }
-        }).start();
+        });
+
+        thread.start();
     }
 
-    public void close() {
-        for (String name : this.scripts.keySet()) {
-            this.scripts.get(name).close();
-        }
+    public void disable() {
+        if (watching) stopWatching();
+
+        scripts.keySet().forEach((name) -> {
+            scripts.get(name).disable();
+            scripts.remove(name);
+        });
     }
 }

@@ -1,4 +1,8 @@
-main: com.mathhulk.spigotscript.Main
+main: com.mathhulk.spigotscript.SpigotScript
 name: SpigotScript
 version: 1.0-SNAPSHOT
 api-version: 1.21.4
+commands:
+  scripts:
+    description: Manage scripts
+    usage: /<command>
