@@ -5,13 +5,13 @@ on:
     inputs:
       artifact:
         type: boolean
-        description: "Store the artifact"
+        description: Store the artifact
         required: false
   workflow_call:
     inputs:
       artifact:
         type: boolean
-        description: "Store the artifact"
+        description: Store the artifact
         required: false
 
 jobs:
@@ -24,15 +24,15 @@ jobs:
       - name: Set up JDK 22
         uses: actions/setup-java@v4
         with:
-          distribution: "zulu"
-          java-version: "22"
-          cache: "maven"
+          distribution: zulu
+          java-version: 23
+          cache: maven
 
       - name: Set up Node 23
         uses: actions/setup-node@v2
         with:
-          node-version: "23"
-          cache: "npm"
+          node-version: latest
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
