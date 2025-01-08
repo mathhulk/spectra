@@ -1,0 +1,22 @@
+{
+  "name": "spigot-script",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mathhulk/spigot-script.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mathhulk/spigot-script/issues"
+  },
+  "homepage": "https://github.com/mathhulk/spigot-script#readme",
+  "scripts": {
+    "build": "turbo run build"
+  },
+  "packageManager": "npm@10.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  }
+}
