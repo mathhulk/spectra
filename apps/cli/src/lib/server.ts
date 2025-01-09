@@ -12,6 +12,8 @@ import { existsSync, Stats } from "fs";
 import { Config, getDirectory, getType, getVersion } from "./config.js";
 import repositories from "./types/repositories.js";
 
+const VERSION_FILE = "version.json";
+
 // TODO: Download the plugin from a remote source
 const PLUGIN_PATH =
   "/Users/matthewrowland/Documents/GitHub/mathhulk/spigot-script/apps/plugin/target/spigot-script-1.0-SNAPSHOT.jar";
@@ -40,33 +42,33 @@ const getStatus = async (
   version: string,
   force = false
 ) => {
-  const statusPath = path.join(dirPath, "status.json");
+  const versionPath = path.join(dirPath, VERSION_FILE);
 
   let valid = false;
 
-  // Validate the existing status
-  exists: if (existsSync(statusPath)) {
+  // Validate the existing repository
+  exists: if (existsSync(versionPath)) {
     let stats: Stats;
 
     try {
-      stats = await stat(statusPath);
+      stats = await stat(versionPath);
     } catch (error) {
-      throw new Error(`Failed to access status file: ${statusPath}`, {
+      throw new Error(`Failed to access version file: ${versionPath}`, {
         cause: error,
       });
     }
 
     if (!stats.isFile()) {
-      throw new Error(`Not a file: ${statusPath}`);
+      throw new Error(`Not a file: ${versionPath}`);
     }
 
     let status: { type: string; version: string; local: boolean };
 
     try {
-      const text = await readFile(statusPath, "utf-8");
+      const text = await readFile(versionPath, "utf-8");
       status = JSON.parse(text);
     } catch (error) {
-      throw new Error(`Failed to read status file: ${statusPath}`, {
+      throw new Error(`Failed to read status file: ${versionPath}`, {
         cause: error,
       });
     }
@@ -93,7 +95,7 @@ const getStatus = async (
   if (valid) return true;
 
   if (force) {
-    await setStatus(statusPath, type, local, version);
+    await setStatus(versionPath, type, local, version);
 
     return false;
   }
@@ -114,7 +116,7 @@ const getStatus = async (
     });
   }
 
-  setStatus(statusPath, type, local, version);
+  setStatus(versionPath, type, local, version);
 
   return false;
 };
