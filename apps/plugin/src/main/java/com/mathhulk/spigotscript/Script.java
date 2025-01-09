@@ -4,7 +4,6 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 
 import java.io.File;
-import java.net.http.HttpClient;
 
 public class Script {
     private Boolean enabled = false;

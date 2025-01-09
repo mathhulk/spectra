@@ -1,0 +1,7 @@
+{
+  "name": "@repo/core",
+  "private": true,
+  "scripts": {
+    "build": "mvn install"
+  }
+}
