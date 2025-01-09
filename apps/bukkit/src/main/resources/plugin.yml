@@ -1,5 +1,5 @@
-main: com.mathhulk.spigotscript.SpigotScript
-name: SpigotScript
+main: com.mathhulk.spectra.Spectra
+name: Spectra
 version: 1.0-SNAPSHOT
 api-version: 1.21.4
 load: STARTUP

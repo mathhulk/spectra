@@ -16,7 +16,7 @@ const VERSION_FILE = "version.json";
 
 // TODO: Download the plugin from a remote source
 const PLUGIN_PATH =
-  "/Users/matthewrowland/Documents/GitHub/mathhulk/spigot-script/apps/plugin/target/spigot-script-1.0-SNAPSHOT.jar";
+  "/Users/matthewrowland/Documents/GitHub/mathhulk/spigot-script/apps/bukkit/target/bukkit-1.0-SNAPSHOT.jar";
 
 const setStatus = async (
   filePath: string,
@@ -191,17 +191,21 @@ export const runServer = async (config: Config, force = false) => {
 
   // Ensure the plugin exists
   const pluginsPath = path.join(directory, "plugins");
-  const pluginPath = path.join(pluginsPath, "spigot-script.jar");
-  const dataPath = path.join(pluginsPath, "SpigotScript");
+  const pluginPath = path.join(pluginsPath, "spectra.jar");
+  // const scriptsPath = path.join(directory, "scripts");
 
-  if (!existsSync(pluginPath)) {
-    await mkdir(pluginsPath, { recursive: true });
+  console.log(force);
 
-    await copyFile(PLUGIN_PATH, pluginPath);
-  }
+  if (!existsSync(pluginPath) || force) {
+    try {
+      await mkdir(pluginsPath, { recursive: true });
 
-  if (!existsSync(dataPath)) {
-    await mkdir(dataPath, { recursive: true });
+      await copyFile(PLUGIN_PATH, pluginPath);
+    } catch (error) {
+      throw new Error(`Failed to inject plugin`, {
+        cause: error,
+      });
+    }
   }
 
   // Accept the EULA
@@ -227,6 +231,7 @@ export const runServer = async (config: Config, force = false) => {
     [...javaAruments, "-jar", serverPath, ...serverArguments],
     {
       cwd: directory,
+      stdio: "inherit",
     }
   );
 

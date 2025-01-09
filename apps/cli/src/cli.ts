@@ -33,17 +33,14 @@ program
   .alias("dev")
   .option("-c, --config <config>", "path to the configuration file")
   .option("-f, --force", "force overwrite the server directory")
-  .action(async (_, options) => {
+  .action(async function () {
+    const options = this.opts();
+
     const config = await getConfig(options.config);
 
-    const { directory } = await runServer(config);
+    const { directory } = await runServer(config, options.force);
 
-    const targetPath = path.resolve(
-      directory,
-      "plugins",
-      "SpigotScript",
-      "scripts"
-    );
+    const targetPath = path.resolve(directory, "scripts");
 
     const outDir = path.resolve(process.cwd(), config.outDir ?? "dist");
 
