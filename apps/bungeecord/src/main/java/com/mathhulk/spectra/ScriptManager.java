@@ -7,22 +7,23 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.bukkit.Bukkit;
+import net.md_5.bungee.api.ProxyServer;
 
 public class ScriptManager {
-  private final Spectra plugin;
+  private final SpectraBungeeCordPlugin plugin;
 
   private final Map<String, Script> scripts = new HashMap<>();
 
   private static final List<String> ALLOWED_EXTENSIONS = List.of("js", "mjs");
 
-  private static final File scriptsDirectory = new File(Bukkit.getServer().getWorldContainer(), "scripts");
+  private static final String SCRIPTS_DIRECTORY = new File(ProxyServer.getInstance().getPluginsFolder().getParentFile(),
+      "scripts").getAbsolutePath();
 
   private Boolean enabled = false;
   private Boolean watching = false;
   private Thread thread;
 
-  public ScriptManager(Spectra plugin) {
+  public ScriptManager(SpectraBungeeCordPlugin plugin) {
     this.plugin = plugin;
   }
 
@@ -31,7 +32,7 @@ public class ScriptManager {
     if (existingScript != null)
       return null;
 
-    File file = new File(scriptsDirectory, fileName);
+    File file = new File(SCRIPTS_DIRECTORY, fileName);
 
     if (!file.exists()) {
       plugin.getLogger().info("Script does not exist: " + file);
@@ -113,7 +114,9 @@ public class ScriptManager {
     if (enabled)
       return false;
 
-    File[] files = scriptsDirectory.listFiles((_, name) -> {
+    File scriptsFolder = new File(SCRIPTS_DIRECTORY);
+
+    File[] files = scriptsFolder.listFiles((_, name) -> {
       String extension = name.substring(name.lastIndexOf(".") + 1);
       return ALLOWED_EXTENSIONS.contains(extension);
     });
@@ -151,7 +154,8 @@ public class ScriptManager {
       try {
         watching = true;
 
-        Path folderPath = scriptsDirectory.toPath();
+        File scriptsFolder = new File(SCRIPTS_DIRECTORY);
+        Path folderPath = scriptsFolder.toPath();
 
         WatchService watchService = FileSystems.getDefault().newWatchService();
         folderPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,

@@ -1,0 +1,10 @@
+{
+  "name": "bungeecord",
+  "private": true,
+  "scripts": {
+    "build": "mvn clean package"
+  },
+  "dependencies": {
+    "@repo/core": "*"
+  }
+}

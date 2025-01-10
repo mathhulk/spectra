@@ -99,8 +99,9 @@ public class CommandManager {
     }
 
     try {
-      getKnownCommands().remove(command.getName());
       // command.unregister(getCommandMap());
+      getKnownCommands().remove(command.getName());
+      getKnownCommands().remove(script.getName() + ":" + command.getName());
       syncCommands();
 
       script.getPlugin().getLogger().info("Removed command: " + command.getName());
@@ -138,18 +139,6 @@ public class CommandManager {
           }
 
           return tabCompleter.apply(sender, this, alias, args);
-        }
-
-        @Override
-        public List<String> getAliases() {
-          return new ArrayList<>();
-        }
-
-        @Override
-        public boolean setName(String name) {
-          super.setName(name);
-
-          return true;
         }
       };
 
