@@ -1,0 +1,17 @@
+{
+  "name": "docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^15.1.4",
+    "nextra": "^4.0.0-app-router.43",
+    "nextra-theme-docs": "^4.0.0-app-router.43",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
