@@ -1,8 +1,9 @@
 name: Publish Documentation
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: ["main"]
+    paths: ["apps/docs/**"]
 
 permissions:
   contents: read
@@ -24,6 +25,8 @@ jobs:
         with:
           node-version: latest
           cache: npm
+
+      - run: npm ci
 
       - uses: actions/configure-pages@v4
         with:
