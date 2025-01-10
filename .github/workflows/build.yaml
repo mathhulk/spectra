@@ -21,15 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 22
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: 23
           cache: maven
 
-      - name: Set up Node 23
-        uses: actions/setup-node@v2
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: latest
           cache: npm
