@@ -2,17 +2,6 @@ name: Build
 
 on:
   workflow_dispatch:
-    inputs:
-      artifact:
-        type: boolean
-        description: Store the artifact
-        required: false
-  workflow_call:
-    inputs:
-      artifact:
-        type: boolean
-        description: Store the artifact
-        required: false
 
 jobs:
   build:
