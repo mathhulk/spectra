@@ -5,8 +5,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.graalvm.polyglot.Value;
+import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
 
@@ -37,20 +36,18 @@ public class EventListenerManager {
     HandlerList.unregisterAll(eventListener);
   }
 
-  public Listener addEventListener(Class<? extends Event> eventClass, Value callback) {
-    JavaPlugin plugin = script.getPlugin();
+  public Listener addEventListener(Class<? extends Event> eventClass, EventListenerFunction callback) {
+    Plugin plugin = script.getPlugin();
 
     try {
-      // Create an EventExecutor
       EventExecutor executor = (_, event) -> {
         if (!eventClass.isInstance(event)) {
           return;
         }
 
-        callback.execute(event);
+        callback.apply(event);
       };
 
-      // TODO: What side effects does this listener have?
       Listener eventListener = new Listener() {
       };
 
@@ -68,7 +65,6 @@ public class EventListenerManager {
 
       return eventListener;
     } catch (Exception e) {
-      // TODO: Track the exception
       plugin.getLogger().severe("Failed to add event listener: " + eventClass.getName());
 
       e.printStackTrace();
@@ -78,12 +74,17 @@ public class EventListenerManager {
   }
 
   @FunctionalInterface
+  public interface EventListenerFunction {
+    void apply(Event event);
+  }
+
+  @FunctionalInterface
   public interface RemoveEventListenerFunction {
-    void apply(Listener listener);
+    void apply(Listener eventListener);
   }
 
   @FunctionalInterface
   public interface AddEventListenerFunction {
-    Listener apply(Class<? extends Event> eventClass, Value callback);
+    Listener apply(Class<? extends Event> eventClass, EventListenerFunction callback);
   }
 }

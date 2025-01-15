@@ -9,11 +9,6 @@ import { readlink, symlink } from "fs/promises";
 import repositories from "./lib/types/repositories.js";
 
 program
-  .name("minecraft-plugin")
-  .version("1.0.0")
-  .description("A Minecraft plugin");
-
-program
   .command("versions")
   .argument("<server-type>")
   .option("-l, --latest", "get the latest version")

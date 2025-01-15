@@ -11,9 +11,7 @@ declare global {
     ) => boolean
   ): org.bukkit.command.Command;
 
-  function addEventListener<
-    T extends typeof org.bukkit.event.player.PlayerJoinEvent
-  >(
+  function addEventListener<T extends abstract new (...args: any) => any>(
     event: T,
     callback: (event: InstanceType<T>) => void
   ): org.bukkit.event.Listener;

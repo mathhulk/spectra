@@ -1,2 +1,2 @@
-.next/
-out/
+.vitepress/dist
+.vitepress/cache

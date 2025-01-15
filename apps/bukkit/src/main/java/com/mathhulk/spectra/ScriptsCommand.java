@@ -9,10 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ScriptsCommand implements CommandExecutor, TabCompleter {
-  private final Spectra spectra;
+  private final Spectra plugin;
 
-  public ScriptsCommand(Spectra spectra) {
-    this.spectra = spectra;
+  public ScriptsCommand(Spectra plugin) {
+    this.plugin = plugin;
   }
 
   @Override
@@ -24,7 +24,7 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
     String firstArgument = arguments[0];
 
     if (firstArgument.equals("stop-watching")) {
-      ScriptManager scriptManager = spectra.getScriptManager();
+      ScriptManager scriptManager = plugin.getScriptManager();
 
       if (!scriptManager.isWatching()) {
         sender.sendMessage("Not watching for scripts.");
@@ -36,7 +36,7 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
     }
 
     if (firstArgument.equals("start-watching")) {
-      ScriptManager scriptManager = spectra.getScriptManager();
+      ScriptManager scriptManager = plugin.getScriptManager();
 
       if (scriptManager.isWatching()) {
         sender.sendMessage("Already watching for scripts.");
@@ -48,7 +48,7 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
     }
 
     if (firstArgument.equals("list")) {
-      ArrayList<Script> scripts = spectra.getScriptManager().getScripts();
+      ArrayList<Script> scripts = plugin.getScriptManager().getScripts();
 
       ArrayList<String> scriptNames = new ArrayList<>();
       scripts.forEach(script -> scriptNames.add(script.getName()));
@@ -64,7 +64,7 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
 
       String scriptName = arguments[1];
 
-      Script script = spectra.getScriptManager().getScript(scriptName);
+      Script script = plugin.getScriptManager().getScript(scriptName);
 
       if (script == null) {
         sender.sendMessage("Script not found: " + scriptName);
@@ -83,7 +83,7 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
 
       String scriptName = arguments[1];
 
-      Script script = spectra.getScriptManager().getScript(scriptName);
+      Script script = plugin.getScriptManager().getScript(scriptName);
 
       if (script == null) {
         sender.sendMessage("Script not found: " + scriptName);
@@ -102,14 +102,14 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
 
       String scriptName = arguments[1];
 
-      Script script = spectra.getScriptManager().getScript(scriptName);
+      Script script = plugin.getScriptManager().getScript(scriptName);
 
       if (script == null) {
         sender.sendMessage("Script not found: " + scriptName);
         return true;
       }
 
-      spectra.getScriptManager().removeScript(scriptName);
+      plugin.getScriptManager().removeScript(scriptName);
       sender.sendMessage("Removed script: " + scriptName);
     }
 
@@ -121,14 +121,14 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
 
       String scriptName = arguments[1];
 
-      Script existingScript = spectra.getScriptManager().getScript(scriptName);
+      Script existingScript = plugin.getScriptManager().getScript(scriptName);
 
       if (existingScript != null) {
         sender.sendMessage("Script already exists: " + scriptName);
         return true;
       }
 
-      Script script = spectra.getScriptManager().addScript(scriptName, true);
+      Script script = plugin.getScriptManager().addScript(scriptName, true);
 
       if (script == null) {
         sender.sendMessage("Failed to add script: " + scriptName);
@@ -139,9 +139,13 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
     }
 
     if (firstArgument.equals("sync")) {
-      ScriptManager scriptManager = spectra.getScriptManager();
+      ScriptManager scriptManager = plugin.getScriptManager();
       scriptManager.disable();
-      scriptManager.enable(true);
+
+      // TODO: Add a flag to disable watching by default
+      scriptManager.load(true);
+
+      scriptManager.enable();
     }
 
     return true;
@@ -154,7 +158,7 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
     }
 
     if (args.length == 2 && List.of("enable", "disable", "remove", "add").contains(args[0])) {
-      ArrayList<Script> scripts = spectra.getScriptManager().getScripts();
+      ArrayList<Script> scripts = plugin.getScriptManager().getScripts();
 
       ArrayList<String> scriptNames = new ArrayList<>();
       scripts.forEach(script -> scriptNames.add(script.getName()));

@@ -1,6 +1,6 @@
 package com.mathhulk.spectra;
 
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
@@ -44,7 +44,7 @@ public class TaskManager {
   public long setInterval(Runnable runnable, long delay) {
     long ticks = delay / 1000 * TICKS_PER_SECOND;
 
-    JavaPlugin plugin = script.getPlugin();
+    Plugin plugin = script.getPlugin();
     BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, runnable, ticks, ticks);
     tasks.put(taskId, task);
 
@@ -64,7 +64,7 @@ public class TaskManager {
   public long setTimeout(Runnable runnable, long delay) {
     long ticks = delay / 1000 * TICKS_PER_SECOND;
 
-    JavaPlugin plugin = script.getPlugin();
+    Plugin plugin = script.getPlugin();
     BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, runnable, ticks);
     tasks.put(taskId, task);
 

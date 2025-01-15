@@ -5,5 +5,5 @@ api-version: 1.21.4
 load: STARTUP
 commands:
   scripts:
-    description: Manage scripts
+    description: Manage Spectra scripts
     usage: /<command>

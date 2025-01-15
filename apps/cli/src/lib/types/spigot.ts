@@ -1,27 +1,44 @@
-import { tmpdir } from "os";
+import os from "os";
 import { createWriteStream, existsSync } from "fs";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 import path from "path";
 import { spawn } from "child_process";
-import { copyFile, mkdir, rm } from "fs/promises";
+import { copyFile, mkdir } from "fs/promises";
 import Repository from "./repository.js";
+
+const getCacheDirectory = () => {
+  const homeDir = os.homedir();
+  const platform = os.platform();
+
+  let root;
+
+  if (platform === "win32") {
+    root = process.env.LOCALAPPDATA || path.join(homeDir, "AppData", "Local");
+  } else if (platform === "darwin") {
+    root = path.join(homeDir, "Library", "Caches");
+  } else {
+    root = process.env.XDG_CACHE_HOME || path.join(homeDir, ".cache");
+  }
+
+  return path.join(root, "Spectra", "spigot");
+};
 
 const BUILD_TOOLS_URL =
   "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar";
-
-const BUILD_TOOLS_TEMP_DIR = path.join(tmpdir(), "BuildTools");
-
-const BUILD_TOOLS_TEMP_FILE = path.join(BUILD_TOOLS_TEMP_DIR, "BuildTools.jar");
 
 const downloadSpigot = async (
   serverPath: string,
   version: string,
   javaPath: string
 ) => {
-  if (!existsSync(BUILD_TOOLS_TEMP_DIR)) {
+  const cacheDir = getCacheDirectory();
+
+  console.log(cacheDir);
+
+  if (!existsSync(cacheDir)) {
     try {
-      await mkdir(BUILD_TOOLS_TEMP_DIR);
+      await mkdir(cacheDir, { recursive: true });
     } catch (error) {
       throw new Error("Failed to create temporary directory", {
         cause: error,
@@ -40,15 +57,19 @@ const downloadSpigot = async (
     throw new Error(`No response body`);
   }
 
-  const stream = createWriteStream(BUILD_TOOLS_TEMP_FILE);
+  const executable = path.join(cacheDir, "BuildTools.jar");
+
+  console.log(executable);
+
+  const stream = createWriteStream(executable);
   await finished(Readable.fromWeb(response.body).pipe(stream));
 
   // Run
   const buildToolsProcess = spawn(
     javaPath,
-    ["-jar", BUILD_TOOLS_TEMP_FILE, "--rev", version],
+    ["-jar", executable, "--rev", version],
     {
-      cwd: BUILD_TOOLS_TEMP_DIR,
+      cwd: cacheDir,
       stdio: "inherit",
     }
   );
@@ -58,17 +79,11 @@ const downloadSpigot = async (
       try {
         if (code === 0) {
           // Copy the output
-          const output = path.join(
-            BUILD_TOOLS_TEMP_DIR,
-            "spigot-" + version + ".jar"
-          );
+          const output = path.join(cacheDir, "spigot-" + version + ".jar");
           await copyFile(output, serverPath);
+
+          resolve();
         }
-
-        // Remove the temporary directory
-        rm(BUILD_TOOLS_TEMP_DIR, { recursive: true });
-
-        if (code === 0) resolve();
 
         throw new Error(`BuildTools failed with exit code ${code}`);
       } catch (error) {

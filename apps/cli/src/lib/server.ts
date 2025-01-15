@@ -16,20 +16,22 @@ const VERSION_FILE = "version.json";
 
 // TODO: Download the plugin from a remote source
 const PLUGIN_PATH =
-  "/Users/matthewrowland/Documents/GitHub/mathhulk/spigot-script/apps/bukkit/target/bukkit-1.0-SNAPSHOT.jar";
+  "/Users/matthewrowland/Documents/GitHub/mathhulk/spectra/apps/bukkit/target/bukkit-1.0-SNAPSHOT.jar";
 
 const setStatus = async (
-  filePath: string,
+  dirPath: string,
   type: string,
   local: boolean,
   version: string
 ) => {
+  const versionPath = path.join(dirPath, VERSION_FILE);
+
   try {
     const status = { type, local, version };
     const text = JSON.stringify(status);
-    await writeFile(filePath, text);
+    await writeFile(versionPath, text);
   } catch (error) {
-    throw new Error(`Failed to write status file: ${filePath}`, {
+    throw new Error(`Failed to write status file: ${versionPath}`, {
       cause: error,
     });
   }
@@ -94,29 +96,23 @@ const getStatus = async (
 
   if (valid) return true;
 
-  if (force) {
-    await setStatus(versionPath, type, local, version);
+  if (!force) {
+    try {
+      const files = await readdir(dirPath);
 
-    return false;
-  }
+      if (files.length > 0) {
+        console.error(
+          "Overwriting an existing server directory can cause unintended side effects; delete the server directory or use the --force option to continue"
+        );
 
-  try {
-    const files = await readdir(dirPath);
-
-    if (files.length > 0) {
-      console.error(
-        "Overwriting an existing server directory can cause unintended side effects; delete the server directory or use the --force option to continue"
-      );
-
-      process.exit(1);
+        process.exit(1);
+      }
+    } catch (error) {
+      throw new Error(`Failed to read directory: ${dirPath}`, {
+        cause: error,
+      });
     }
-  } catch (error) {
-    throw new Error(`Failed to read directory: ${dirPath}`, {
-      cause: error,
-    });
   }
-
-  setStatus(versionPath, type, local, version);
 
   return false;
 };
@@ -189,12 +185,12 @@ export const runServer = async (config: Config, force = false) => {
     console.log("Done downloading!");
   }
 
+  // Set the server status
+  setStatus(directory, type, local, version);
+
   // Ensure the plugin exists
   const pluginsPath = path.join(directory, "plugins");
   const pluginPath = path.join(pluginsPath, "spectra.jar");
-  // const scriptsPath = path.join(directory, "scripts");
-
-  console.log(force);
 
   if (!existsSync(pluginPath) || force) {
     try {

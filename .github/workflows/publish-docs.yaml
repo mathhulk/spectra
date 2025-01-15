@@ -1,4 +1,4 @@
-name: Publish Documentation
+name: Publish documentation
 on:
   workflow_dispatch:
   push:
@@ -24,20 +24,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: latest
-          cache: npm
 
-      - run: npm ci
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: "**/node_modules/**"
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
 
       - uses: actions/configure-pages@v4
-        with:
-          static_site_generator: next
 
-      - name: Build Documentation
+      - name: Build documentation
         run: npx turbo run build --filter=docs
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./apps/docs/out
+          path: ./apps/docs/.vitepress/dist
 
   deploy:
     environment:
@@ -48,6 +55,6 @@ jobs:
     needs: build
 
     steps:
-      - name: Deploy Documentation
+      - name: Deploy documentation
         id: deployment
         uses: actions/deploy-pages@v4

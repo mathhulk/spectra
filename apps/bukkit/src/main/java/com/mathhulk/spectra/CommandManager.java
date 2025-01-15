@@ -5,8 +5,8 @@ import org.bukkit.Server;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.SimplePluginManager;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -27,7 +27,7 @@ public class CommandManager {
    * Syncs commands on the main thread using reflection
    */
   private void syncCommands() {
-    JavaPlugin plugin = getScript().getPlugin();
+    Plugin plugin = getScript().getPlugin();
 
     Runnable runnable = () -> {
       try {
