@@ -16,7 +16,7 @@ public class ScriptManager {
 
   private static final List<String> ALLOWED_EXTENSIONS = List.of("js", "mjs");
 
-  private static final File scriptsDirectory = new File(Bukkit.getServer().getWorldContainer(), "scripts");
+  private static final File SCRIPTS_DIRECTORY = new File(Bukkit.getServer().getWorldContainer(), "scripts");
 
   private Boolean enabled = false;
   private Boolean loaded = false;
@@ -35,7 +35,7 @@ public class ScriptManager {
     if (existingScript != null)
       return null;
 
-    File file = new File(scriptsDirectory, fileName);
+    File file = new File(SCRIPTS_DIRECTORY, fileName);
 
     if (!file.exists()) {
       plugin.getLogger().info("Script does not exist: " + file);
@@ -122,7 +122,7 @@ public class ScriptManager {
     if (loaded)
       return false;
 
-    File[] files = scriptsDirectory.listFiles((_, name) -> {
+    File[] files = SCRIPTS_DIRECTORY.listFiles((_, name) -> {
       String extension = name.substring(name.lastIndexOf(".") + 1);
       return ALLOWED_EXTENSIONS.contains(extension);
     });
@@ -164,7 +164,7 @@ public class ScriptManager {
 
     thread = new Thread(() -> {
       try {
-        Path folderPath = scriptsDirectory.toPath();
+        Path folderPath = SCRIPTS_DIRECTORY.toPath();
 
         watchService = FileSystems.getDefault().newWatchService();
 

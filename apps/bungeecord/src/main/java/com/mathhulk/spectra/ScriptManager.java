@@ -10,25 +10,29 @@ import java.util.Map;
 import net.md_5.bungee.api.ProxyServer;
 
 public class ScriptManager {
-  private final SpectraBungeeCordPlugin plugin;
+  private final Spectra plugin;
 
   private final Map<String, Script> scripts = new HashMap<>();
 
   private static final List<String> ALLOWED_EXTENSIONS = List.of("js", "mjs");
 
-  private static final String SCRIPTS_DIRECTORY = new File(ProxyServer.getInstance().getPluginsFolder().getParentFile(),
-      "scripts").getAbsolutePath();
+  private static final File SCRIPTS_DIRECTORY = new File(ProxyServer.getInstance().getPluginsFolder().getParentFile(),
+      "scripts");
 
   private Boolean enabled = false;
-  private Boolean watching = false;
+  private Boolean loaded = false;
+
+  private WatchService watchService;
+  private volatile Boolean watching = false;
   private Thread thread;
 
-  public ScriptManager(SpectraBungeeCordPlugin plugin) {
+  public ScriptManager(Spectra plugin) {
     this.plugin = plugin;
   }
 
   public Script addScript(String fileName, Boolean enable) {
     Script existingScript = scripts.get(fileName);
+
     if (existingScript != null)
       return null;
 
@@ -50,6 +54,8 @@ public class ScriptManager {
 
     try {
       Script script = new Script(file, plugin);
+      script.load();
+
       if (enable)
         script.enable();
 
@@ -77,6 +83,7 @@ public class ScriptManager {
 
   public Boolean enableScript(String name) {
     Script script = scripts.get(name);
+
     if (script == null)
       return false;
 
@@ -85,6 +92,7 @@ public class ScriptManager {
 
   public Boolean disableScript(String name) {
     Script script = scripts.get(name);
+
     if (script == null)
       return false;
 
@@ -93,6 +101,7 @@ public class ScriptManager {
 
   public Boolean removeScript(String name) {
     Script script = scripts.get(name);
+
     if (script == null)
       return false;
 
@@ -110,27 +119,25 @@ public class ScriptManager {
     return new ArrayList<>(scripts.values());
   }
 
-  public Boolean enable(Boolean watch) {
-    if (enabled)
+  public Boolean load(Boolean watch) {
+    if (loaded)
       return false;
 
-    File scriptsFolder = new File(SCRIPTS_DIRECTORY);
-
-    File[] files = scriptsFolder.listFiles((_, name) -> {
+    File[] files = SCRIPTS_DIRECTORY.listFiles((_, name) -> {
       String extension = name.substring(name.lastIndexOf(".") + 1);
       return ALLOWED_EXTENSIONS.contains(extension);
     });
 
     if (files != null) {
       for (File file : files) {
-        addScript(file.getName(), true);
+        addScript(file.getName(), false);
       }
     }
 
-    if (!watch)
-      return true;
+    if (watch)
+      startWatching();
 
-    startWatching();
+    loaded = true;
 
     return true;
   }
@@ -140,6 +147,12 @@ public class ScriptManager {
       return;
 
     watching = false;
+
+    // try {
+    // watchService.close();
+    // } catch (Exception e) {
+    // e.printStackTrace();
+    // }
 
     thread.interrupt();
 
@@ -152,20 +165,30 @@ public class ScriptManager {
 
     thread = new Thread(() -> {
       try {
-        watching = true;
+        Path folderPath = SCRIPTS_DIRECTORY.toPath();
 
-        File scriptsFolder = new File(SCRIPTS_DIRECTORY);
-        Path folderPath = scriptsFolder.toPath();
+        watchService = FileSystems.getDefault().newWatchService();
 
-        WatchService watchService = FileSystems.getDefault().newWatchService();
         folderPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,
             StandardWatchEventKinds.ENTRY_DELETE);
 
         plugin.getLogger().info("Started watching for scripts");
 
-        while (watching) {
-          WatchKey key = watchService.take();
+        watching = true;
 
+        while (watching) {
+          WatchKey key;
+
+          try {
+            key = watchService.take();
+          } catch (InterruptedException e) {
+            if (!watching)
+              break;
+
+            continue;
+          }
+
+          //
           for (WatchEvent<?> event : key.pollEvents()) {
             WatchEvent.Kind<?> kind = event.kind();
 
@@ -196,15 +219,36 @@ public class ScriptManager {
           key.reset();
         }
       } catch (Exception e) {
-        plugin.getLogger().warning("Stopped watching for scripts");
-
         e.printStackTrace();
+      } finally {
+        try {
+          if (watchService != null) {
+            watchService.close();
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
 
         watching = false;
+
+        plugin.getLogger().info("Stopped watching for scripts");
       }
     });
 
     thread.start();
+  }
+
+  public Boolean enable() {
+    if (enabled)
+      return false;
+
+    scripts.keySet().forEach((name) -> {
+      scripts.get(name).enable();
+    });
+
+    enabled = true;
+
+    return true;
   }
 
   public Boolean disable() {
@@ -216,7 +260,6 @@ public class ScriptManager {
 
     scripts.keySet().forEach((name) -> {
       scripts.get(name).disable();
-      scripts.remove(name);
     });
 
     enabled = false;

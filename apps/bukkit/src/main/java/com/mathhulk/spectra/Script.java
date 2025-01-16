@@ -93,8 +93,6 @@ public class Script {
     try {
       exports = context.eval(Source.newBuilder(language, file).build());
 
-      plugin.getLogger().info(exports.toString());
-
       loaded = true;
 
       return true;

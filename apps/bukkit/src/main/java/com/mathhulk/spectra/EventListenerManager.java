@@ -36,7 +36,21 @@ public class EventListenerManager {
     HandlerList.unregisterAll(eventListener);
   }
 
-  public Listener addEventListener(Class<? extends Event> eventClass, EventListenerFunction callback) {
+  public Listener addEventListener(Class<? extends Event> eventClass, EventListenerFunction callback,
+      EventPriority... optionalParameters) {
+    if (optionalParameters.length > 1) {
+      throw new IllegalArgumentException("Expected at most 3 arguments but found " + (optionalParameters.length + 2));
+    }
+
+    if (optionalParameters.length == 0) {
+      return registerEventListener(eventClass, callback, EventPriority.NORMAL);
+    }
+
+    return registerEventListener(eventClass, callback, optionalParameters[0]);
+  }
+
+  public Listener registerEventListener(Class<? extends Event> eventClass, EventListenerFunction callback,
+      EventPriority priority) {
     Plugin plugin = script.getPlugin();
 
     try {
@@ -55,7 +69,7 @@ public class EventListenerManager {
       plugin.getServer().getPluginManager().registerEvent(
           eventClass,
           eventListener,
-          EventPriority.NORMAL,
+          priority,
           executor,
           plugin);
 
@@ -85,6 +99,7 @@ public class EventListenerManager {
 
   @FunctionalInterface
   public interface AddEventListenerFunction {
-    Listener apply(Class<? extends Event> eventClass, EventListenerFunction callback);
+    Listener apply(Class<? extends Event> eventClass, EventListenerFunction callback,
+        EventPriority... optionalParameters);
   }
 }

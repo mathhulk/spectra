@@ -7,12 +7,14 @@ import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.SimplePluginManager;
+import org.graalvm.polyglot.Value;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CommandManager {
   private final Script script;
@@ -112,19 +114,37 @@ public class CommandManager {
     }
   }
 
-  public Command addCommand(String name, ExecutorFunction executor, TabCompleterFunction... optionalParameters) {
+  public Command addCommand(Value options, ExecutorFunction executor,
+      TabCompleterFunction... optionalParameters) {
     if (optionalParameters.length > 1) {
       throw new IllegalArgumentException("Expected at most 3 arguments but found " + (optionalParameters.length + 2));
     }
 
-    if (optionalParameters.length == 0) {
-      return registerCommand(name, executor, null);
+    HashMap<String, Object> parsedOptions = new HashMap<>();
+
+    if (options.isString()) {
+      parsedOptions.put("name", options.asString());
+    } else {
+      for (String key : options.getMemberKeys()) {
+        parsedOptions.put(key, options.getMember(key).asString());
+      }
     }
 
-    return registerCommand(name, executor, optionalParameters[0]);
+    if (optionalParameters.length == 0) {
+      return registerCommand(parsedOptions, executor, null);
+    }
+
+    return registerCommand(parsedOptions, executor, optionalParameters[0]);
   }
 
-  private Command registerCommand(String name, ExecutorFunction executor, TabCompleterFunction tabCompleter) {
+  private Command registerCommand(Map<String, Object> options, ExecutorFunction executor,
+      TabCompleterFunction tabCompleter) {
+    String name = (String) options.get("name");
+
+    if (name == null) {
+      throw new IllegalArgumentException("Expected name but found null");
+    }
+
     try {
       Command command = new Command(name) {
         @Override
@@ -141,6 +161,23 @@ public class CommandManager {
           return tabCompleter.apply(sender, this, alias, args);
         }
       };
+
+      String permission = (String) options.get("permission");
+      if (permission != null)
+        command.setPermission(permission);
+
+      @SuppressWarnings("unchecked")
+      List<String> aliases = (List<String>) options.get("aliases");
+      if (aliases != null)
+        command.setAliases(aliases);
+
+      String description = (String) options.get("description");
+      if (description != null)
+        command.setDescription(description);
+
+      String usage = (String) options.get("usage");
+      if (usage != null)
+        command.setUsage(usage);
 
       // getKnownCommands().put(name, command);
       getCommandMap().register(script.getName(), command);
@@ -180,7 +217,12 @@ public class CommandManager {
   }
 
   @FunctionalInterface
-  public interface AddCommandFunction {
+  public interface SimpleAddCommandFunction {
     Command apply(String name, ExecutorFunction executor, TabCompleterFunction... tabCompleter);
+  }
+
+  @FunctionalInterface
+  public interface AddCommandFunction {
+    Command apply(Value options, ExecutorFunction executor, TabCompleterFunction... tabCompleter);
   }
 }

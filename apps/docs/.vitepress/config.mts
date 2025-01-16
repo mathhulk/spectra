@@ -5,12 +5,18 @@ export default defineConfig({
   title: "Spectra",
   description: "A VitePress Site",
   base: "/spectra/",
+  lastUpdated: true,
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: "Home", link: "/" },
       { text: "Examples", link: "/markdown-examples" },
     ],
+
+    editLink: {
+      pattern: "https://github.com/mathhulk/spectra/edit/main/apps/docs/:path",
+      text: "Edit this page on GitHub",
+    },
 
     search: {
       provider: "local",

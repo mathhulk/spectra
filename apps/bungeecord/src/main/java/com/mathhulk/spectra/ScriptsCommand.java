@@ -9,9 +9,9 @@ import net.md_5.bungee.api.plugin.Command;
 import net.md_5.bungee.api.plugin.TabExecutor;
 
 public class ScriptsCommand extends Command implements TabExecutor {
-  private final SpectraBungeeCordPlugin plugin;
+  private final Spectra plugin;
 
-  public ScriptsCommand(SpectraBungeeCordPlugin plugin) {
+  public ScriptsCommand(Spectra plugin) {
     super("scripts", "spectra.command.scripts");
 
     this.plugin = plugin;
@@ -144,7 +144,11 @@ public class ScriptsCommand extends Command implements TabExecutor {
     if (firstArgument.equals("sync")) {
       ScriptManager scriptManager = plugin.getScriptManager();
       scriptManager.disable();
-      scriptManager.enable(true);
+
+      // TODO: Add a flag to disable watching by default
+      scriptManager.load(true);
+
+      scriptManager.enable();
     }
 
     return;

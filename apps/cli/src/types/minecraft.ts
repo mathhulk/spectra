@@ -2,6 +2,22 @@ import "./bukkit.js";
 
 declare global {
   function addCommand(
+    options: {
+      name: string;
+      aliases?: string[];
+      description?: string;
+      usage?: string;
+      permission?: string;
+    },
+    callback: (
+      sender: org.bukkit.command.CommandSender,
+      command: org.bukkit.command.Command,
+      label: string,
+      args: string[]
+    ) => boolean
+  ): org.bukkit.command.Command;
+
+  function addCommand(
     name: string,
     callback: (
       sender: org.bukkit.command.CommandSender,
