@@ -169,7 +169,7 @@ export const runServer = async (config: Config, force = false) => {
       break download;
     }
 
-    console.log("Downloading...");
+    console.log(`Downloading ${type} ${version}...`);
 
     await repositories[type].downloadVersion(serverPath, version, javaPath);
 
@@ -181,7 +181,11 @@ export const runServer = async (config: Config, force = false) => {
 
   // Ensure the plugin exists
   try {
+    console.log("Downloading plugin...");
+
     await downloadPlugin(directory);
+
+    console.log("Done downloading!");
   } catch (error) {
     throw new Error("Failed to download plugin", { cause: error });
   }
