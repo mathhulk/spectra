@@ -1,7 +1,7 @@
 #! /usr/bin/env node
 
 import { program } from "commander";
-import { readdir } from "fs/promises";
+import { cp, readdir } from "fs/promises";
 import path from "path";
 
 const DEFAULT_TEMPLATE = "javascript";
@@ -33,7 +33,30 @@ program
 
     const template = await getTemplate(options.template);
 
-    console.log("Template:", template);
+    // Copy the template to the current directory
+    console.log(`Creating project using template: ${template}`);
+
+    const templateDir = path.join(TEMPLATES_DIR, template);
+    const currentDir = process.cwd();
+
+    try {
+      const files = await readdir(templateDir);
+
+      for (const file of files) {
+        const src = path.join(templateDir, file);
+        const dest = path.join(currentDir, file);
+
+        await cp(src, dest, { recursive: true });
+      }
+
+      console.log(
+        "Project created successfully. Run `npm install` to install dependencies and `npm run dev` to start the development server."
+      );
+    } catch (error) {
+      throw new Error("Failed to create project", {
+        cause: error,
+      });
+    }
   });
 
 program.parse();
