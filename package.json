@@ -1,13 +1,5 @@
 {
   "name": "spectra",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mathhulk/spectra.git"
-  },
-  "bugs": {
-    "url": "https://github.com/mathhulk/spectra/issues"
-  },
-  "homepage": "https://github.com/mathhulk/spectra#readme",
   "scripts": {
     "build": "turbo run build"
   },

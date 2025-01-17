@@ -1,4 +1,4 @@
-name: Publish documentation
+name: Deploy documentation
 on:
   workflow_dispatch:
   push:
@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/configure-pages@v4
 
-      - name: Build documentation
+      - name: Build
         run: npx turbo run build --filter=docs
 
       - uses: actions/upload-pages-artifact@v3
@@ -55,6 +55,6 @@ jobs:
     needs: build
 
     steps:
-      - name: Deploy documentation
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
