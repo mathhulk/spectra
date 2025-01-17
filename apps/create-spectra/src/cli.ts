@@ -3,11 +3,12 @@
 import { program } from "commander";
 import { cp, readdir } from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const DEFAULT_TEMPLATE = "javascript";
 
 const TEMPLATES_DIR = path.join(
-  path.dirname(import.meta.url),
+  fileURLToPath(path.dirname(import.meta.url)),
   "..",
   "templates"
 );
