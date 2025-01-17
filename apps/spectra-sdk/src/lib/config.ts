@@ -149,7 +149,7 @@ export const getConfig = async (configPath?: string): Promise<Config> => {
   // Force the provided path to be used; otherwise, fall back to the default paths
   const fileNames = configPath
     ? [configPath]
-    : ["minecraft.config.mjs", "minecraft.config.js"];
+    : ["spectra.config.mjs", "spectra.config.js"];
 
   // Try each file until one can be imported
   for (const fileName of fileNames) {

@@ -6,6 +6,6 @@
     "dev": "spectra-sdk"
   },
   "devDependencies": {
-    "spectra-sdk": "latest"
+    "spectra-sdk": "^0.0.1-beta.6"
   }
 }
