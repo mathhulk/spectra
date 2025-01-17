@@ -1,0 +1,35 @@
+{
+  "name": "create-spectra",
+  "version": "0.0.0",
+  "type": "module",
+  "files": [
+    "dist/"
+  ],
+  "bin": "./dist/cli.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  },
+  "description": "Templates for building Minecraft server scripts with Spectra",
+  "keywords": [
+    "minecraft",
+    "server",
+    "spectra",
+    "templates"
+  ],
+  "homepage": "https://mathhulk.github.io/spectra",
+  "bugs": "https://github.com/mathhulk/spectra/issues",
+  "license": "GPL-3.0",
+  "author": "Matthew Rowland (https://github.com/mathhulk/)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mathhulk/spectra.git",
+    "directory": "apps/create-spectra"
+  }
+}
