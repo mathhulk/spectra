@@ -36,7 +36,10 @@ program
     const config = await getConfig(options.config);
 
     // Run the server
-    const { directory } = await runServer(config, options.force);
+    const { directory, process: serverProcess } = await runServer(
+      config,
+      options.force
+    );
 
     // Build the script(s)
     const format = config.build?.format ?? "esm";
@@ -53,6 +56,13 @@ program
       platform,
       outdir,
       entryPoints,
+    });
+
+    // Terminate the build and the parent when the server process exits
+    serverProcess.on("close", () => {
+      context.dispose();
+
+      process.exit(0);
     });
 
     await context.watch();

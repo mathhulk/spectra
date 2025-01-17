@@ -217,5 +217,10 @@ export const runServer = async (config: Config, force = false) => {
     }
   );
 
+  // Ensure the child process reflects the parent
+  process.on("SIGINT", () => {
+    serverProcess.kill("SIGINT");
+  });
+
   return { directory, process: serverProcess };
 };

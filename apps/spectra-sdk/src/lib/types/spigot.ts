@@ -72,6 +72,11 @@ const downloadSpigot = async (
     }
   );
 
+  // Ensure the child process reflects the parent
+  process.on("SIGINT", () => {
+    buildToolsProcess.kill("SIGINT");
+  });
+
   return new Promise<void>((resolve, reject) => {
     buildToolsProcess.on("close", async (code) => {
       try {
