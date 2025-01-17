@@ -146,23 +146,24 @@ const getExecutablePath = async (executablePath?: string) => {
 // TODO: Class
 export const runServer = async (config: Config, force = false) => {
   // Validate the server type
-  const type = getType(config.type);
+  const type = getType(config.server?.type);
 
   // Validate the local executable if provided
-  const executablePath = await getExecutablePath(config.jar?.path);
+  const executablePath = await getExecutablePath(config.server?.jar?.path);
 
   const local = !!executablePath;
 
   // Validate the server version if necessary
-  const version = executablePath ?? (await getVersion(type, config.version));
+  const version =
+    executablePath ?? (await getVersion(type, config.server?.version));
 
   // Validate the server directory
-  const directory = await getDirectory(config.dir);
+  const directory = await getDirectory(config.server?.dir);
 
   // Validate the server status
   const status = await getStatus(directory, type, local, version, force);
 
-  const javaPath = config.java?.path ?? "java";
+  const javaPath = config.server?.java?.path ?? "java";
   const serverPath = path.resolve(process.cwd(), directory, "server.jar");
 
   download: if (!existsSync(serverPath) || !status) {
@@ -205,7 +206,7 @@ export const runServer = async (config: Config, force = false) => {
   }
 
   // Accept the EULA
-  if (!config.eula) {
+  if (!config.server?.eula) {
     console.log(
       "You must accept the EULA (https://aka.ms/MinecraftEULA) before you can run a server. Please set eula to true in your configuration file"
     );
@@ -217,8 +218,8 @@ export const runServer = async (config: Config, force = false) => {
   writeFile(eulaPath, "eula=true");
 
   // Run Spigot
-  const javaAruments = config.java?.args ?? ["-Xmx2G", "-Xms2G"];
-  const serverArguments = config?.jar?.args ?? ["nogui"];
+  const javaAruments = config.server?.java?.args ?? ["-Xmx2G", "-Xms2G"];
+  const serverArguments = config?.server?.jar?.args ?? ["nogui"];
 
   console.log("Starting server...");
 

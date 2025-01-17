@@ -7,6 +7,7 @@ import { runServer } from "./lib/server.js";
 import path from "path";
 import { readlink, symlink } from "fs/promises";
 import repositories from "./lib/types/repositories.js";
+import esbuild from "esbuild";
 
 program
   .command("versions")
@@ -31,15 +32,35 @@ program
   .action(async function () {
     const options = this.opts();
 
+    // Parse the configuration file
     const config = await getConfig(options.config);
 
+    // Run the server
     const { directory } = await runServer(config, options.force);
 
-    const targetPath = path.resolve(directory, "scripts");
+    // Build the script(s)
+    const format = config.build?.format ?? "esm";
+    const bundle = config.build?.bundle ?? true;
+    const platform = config.build?.platform ?? "node";
+    const outdir = config.build?.outdir ?? "dist";
+    const entryPoints = config.build?.entryPoints ?? [
+      path.resolve(process.cwd(), "src" + path.sep + "main.ts"),
+    ];
 
-    const outDir = path.resolve(process.cwd(), config.outDir ?? "dist");
+    const context = await esbuild.context({
+      format,
+      bundle,
+      platform,
+      outdir,
+      entryPoints,
+    });
+
+    await context.watch();
 
     // Link the scripts directory to the output directory
+    const targetPath = path.resolve(directory, "scripts");
+    const outDir = path.resolve(process.cwd(), outdir);
+
     try {
       await readlink(targetPath);
     } catch {

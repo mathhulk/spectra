@@ -3,69 +3,68 @@ import path from "path";
 import process from "process";
 import repositories from "./types/repositories.js";
 import { mkdir, stat } from "fs/promises";
+import esbuild from "esbuild";
 
 /**
  * Options for running the Minecraft server
  */
 export interface Config {
-  /**
-   * You must accept the [EULA](https://aka.ms/MinecraftEULA) before you can run a server
-   * @default false
-   */
-  eula?: boolean;
+  build?: esbuild.BuildOptions;
 
-  /**
-   * Output directory
-   * @default "dist"
-   */
-  outDir?: string;
-
-  /**
-   * Server directory
-   * @default ".minecraft"
-   */
-  dir?: string;
-
-  /**
-   * Server type
-   * @default "spigot"
-   */
-  type?: "spigot" | "paper" | "purpur";
-
-  /**
-   * Server version
-   *
-   * Ignored if `jar.path` is provided; defaults to the latest version otherwise
-   */
-  version?: string;
-
-  java?: {
+  server?: {
     /**
-     * Path to the Java executable
-     * @default "java"
+     * You must accept the [EULA](https://aka.ms/MinecraftEULA) before you can run a server
+     * @default false
      */
-    path?: string;
+    eula?: boolean;
 
     /**
-     * Arguments to pass to the Java executable
-     * @default ["-Xmx2G', '-Xms2G"]
+     * Server directory
+     * @default ".minecraft"
      */
-    args?: string[];
-  };
+    dir?: string;
 
-  jar?: {
     /**
-     * Path to the server executable
+     * Server type
+     * @default "spigot"
+     */
+    type?: "spigot" | "paper" | "purpur";
+
+    /**
+     * Server version
      *
-     * Ignores `version` and uses the provided file instead
+     * Ignored if `jar.path` is provided; defaults to the latest version otherwise
      */
-    path?: string;
+    version?: string;
 
-    /**
-     * Arguments to pass to the server executable
-     * @default ["nogui"]
-     */
-    args?: string[];
+    java?: {
+      /**
+       * Path to the Java executable
+       * @default "java"
+       */
+      path?: string;
+
+      /**
+       * Arguments to pass to the Java executable
+       * @default ["-Xmx2G', '-Xms2G"]
+       */
+      args?: string[];
+    };
+
+    jar?: {
+      /**
+       * Path to the server executable
+       *
+       * Ignores `version` and uses the provided file instead
+       */
+      path?: string;
+
+      /**
+       * Arguments to pass to the server executable
+       * @default ["nogui"]
+       */
+      args?: string[];
+    };
   };
 }
 
