@@ -6,7 +6,11 @@ import path from "path";
 
 const DEFAULT_TEMPLATE = "javascript";
 
-const TEMPLATES_DIR = path.join(__dirname, "..", "templates");
+const TEMPLATES_DIR = path.join(
+  path.dirname(import.meta.url),
+  "..",
+  "templates"
+);
 
 const getTemplate = async (template?: string) => {
   if (template) {
