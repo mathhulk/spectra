@@ -32,9 +32,9 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
 
       - name: Build
-        run: npx turbo run build --filter=create-spectra
+        run: npx turbo run build --filter create-spectra
 
       - name: Publish
-        run: npm publish ./apps/create-spectra --provenance --access public --workspace create-spectra
+        run: npm publish --provenance --access public --workspace create-spectra
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
