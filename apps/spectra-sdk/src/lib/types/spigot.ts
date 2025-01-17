@@ -59,8 +59,6 @@ const downloadSpigot = async (
 
   const executable = path.join(cacheDir, "BuildTools.jar");
 
-  console.log(executable);
-
   const stream = createWriteStream(executable);
   await finished(Readable.fromWeb(response.body).pipe(stream));
 

@@ -1,22 +1,12 @@
 import path from "path";
 import { spawn } from "child_process";
-import {
-  copyFile,
-  mkdir,
-  stat,
-  readFile,
-  writeFile,
-  readdir,
-} from "fs/promises";
+import { copyFile, stat, readFile, writeFile, readdir } from "fs/promises";
 import { existsSync, Stats } from "fs";
 import { Config, getDirectory, getType, getVersion } from "./config.js";
 import repositories from "./types/repositories.js";
+import downloadPlugin from "./plugin.js";
 
 const VERSION_FILE = "version.json";
-
-// TODO: Download the plugin from a remote source
-const PLUGIN_PATH =
-  "/Users/matthewrowland/Documents/GitHub/mathhulk/spectra/apps/bukkit/target/bukkit-1.0-SNAPSHOT.jar";
 
 const setStatus = async (
   dirPath: string,
@@ -55,7 +45,7 @@ const getStatus = async (
     try {
       stats = await stat(versionPath);
     } catch (error) {
-      throw new Error(`Failed to access version file: ${versionPath}`, {
+      throw new Error(`Failed to access status file: ${versionPath}`, {
         cause: error,
       });
     }
@@ -190,19 +180,10 @@ export const runServer = async (config: Config, force = false) => {
   setStatus(directory, type, local, version);
 
   // Ensure the plugin exists
-  const pluginsPath = path.join(directory, "plugins");
-  const pluginPath = path.join(pluginsPath, "spectra.jar");
-
-  if (!existsSync(pluginPath) || force) {
-    try {
-      await mkdir(pluginsPath, { recursive: true });
-
-      await copyFile(PLUGIN_PATH, pluginPath);
-    } catch (error) {
-      throw new Error(`Failed to inject plugin`, {
-        cause: error,
-      });
-    }
+  try {
+    await downloadPlugin(directory);
+  } catch (error) {
+    throw new Error("Failed to download plugin", { cause: error });
   }
 
   // Accept the EULA

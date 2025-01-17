@@ -24,6 +24,7 @@ public class Script {
   private final String name;
 
   private final String language = "js";
+  private final String mimeType = "application/javascript+module";
 
   public Script(File file, Plugin plugin) {
     this.file = file;
@@ -91,7 +92,7 @@ public class Script {
         (TaskManager.ClearTimeoutFunction) taskManager::clearTimeout);
 
     try {
-      exports = context.eval(Source.newBuilder(language, file).build());
+      exports = context.eval(Source.newBuilder(language, file).mimeType(mimeType).build());
 
       loaded = true;
 

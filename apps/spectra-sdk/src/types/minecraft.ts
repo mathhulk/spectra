@@ -36,6 +36,10 @@ declare global {
 
   function removeCommand(command: org.bukkit.command.Command): void;
 
+  function setInterval(callback: () => void, delay: number): number;
+
+  function setTimeout(callback: () => void, delay: number): number;
+
   // @ts-expect-error
   const console: {
     log(...args: unknown[]): void;
