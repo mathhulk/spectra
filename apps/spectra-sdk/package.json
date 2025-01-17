@@ -1,6 +1,6 @@
 {
   "name": "spectra-sdk",
-  "version": "0.0.1-beta.4",
+  "version": "0.0.1-beta.5",
   "type": "module",
   "files": [
     "dist/"
@@ -31,7 +31,8 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "commander": "^13.0.0"
+    "commander": "^13.0.0",
+    "esbuild": "^0.24.2"
   },
   "description": "SDK for building Minecraft server scripts with Spectra",
   "keywords": [

@@ -1,11 +1,12 @@
 #! /usr/bin/env node
 
 import { program } from "commander";
-import { cp, readdir } from "fs/promises";
+import { existsSync } from "fs";
+import { cp, mkdir, readdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const DEFAULT_TEMPLATE = "javascript";
+const DEFAULT_TEMPLATE = "js";
 
 const TEMPLATES_DIR = path.join(
   fileURLToPath(path.dirname(import.meta.url)),
@@ -33,23 +34,38 @@ program
   .alias("dev")
   .option("-t, --template <template>", "template to use")
   .option("-f, --force", "force the creation of the project")
+  .argument("[path]", "path to create the project in", ".")
   .action(async function () {
     const options = this.opts();
+    const dirPath = this.args[0];
 
     const template = await getTemplate(options.template);
 
-    // Copy the template to the current directory
-    console.log(`Creating project using template: ${template}`);
-
     const templateDir = path.join(TEMPLATES_DIR, template);
-    const currentDir = process.cwd();
+    const targetDir = path.resolve(process.cwd(), dirPath);
 
     try {
+      const exists = existsSync(targetDir);
+
+      if (exists && !options.force) {
+        const existingFiles = await readdir(targetDir);
+
+        if (existingFiles.length > 0) {
+          console.error(
+            `Directory ${targetDir} is not empty. Use --force to overwrite.`
+          );
+
+          process.exit(1);
+        }
+      } else {
+        await mkdir(targetDir, { recursive: true });
+      }
+
       const files = await readdir(templateDir);
 
       for (const file of files) {
         const src = path.join(templateDir, file);
-        const dest = path.join(currentDir, file);
+        const dest = path.join(targetDir, file);
 
         await cp(src, dest, { recursive: true });
       }
