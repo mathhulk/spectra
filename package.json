@@ -3,12 +3,12 @@
   "scripts": {
     "build": "turbo run build"
   },
-  "packageManager": "npm@10.0.0",
+  "packageManager": "npm@11.4.1",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "devDependencies": {
-    "turbo": "^2.3.3"
+    "turbo": "^2.5.3"
   }
 }

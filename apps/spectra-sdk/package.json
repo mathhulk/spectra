@@ -27,12 +27,12 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "commander": "^13.0.0",
-    "esbuild": "^0.24.2"
+    "commander": "^14.0.0",
+    "esbuild": "^0.25.4"
   },
   "description": "SDK for building Minecraft server scripts with Spectra",
   "keywords": [

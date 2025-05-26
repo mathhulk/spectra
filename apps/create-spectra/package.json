@@ -13,11 +13,11 @@
     "build": "tsc"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "commander": "^13.0.0"
+    "commander": "^14.0.0"
   },
   "description": "Templates for building Minecraft server scripts with Spectra",
   "keywords": [
