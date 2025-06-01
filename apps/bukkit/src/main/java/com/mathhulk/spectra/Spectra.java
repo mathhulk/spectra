@@ -1,18 +1,18 @@
 package com.mathhulk.spectra;
 
-import java.io.File;
-
 import org.bukkit.command.PluginCommand;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.PluginManager;
+import org.bukkit.generator.BiomeProvider;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import com.mathhulk.spectra.plugin.ScriptPlugin;
-import com.mathhulk.spectra.plugin.ScriptPluginLoader;
+import com.mathhulk.spectra.plugins.ScriptPluginManager;
+import com.mathhulk.spectra.scripts.ScriptManager;
+import com.mathhulk.spectra.ui.VerifiedPlayerManager;
 
 public class Spectra extends JavaPlugin {
   private ScriptManager scriptManager;
-  private ScriptPluginLoader pluginLoader;
+  private ScriptPluginManager scriptPluginManager;
+  private VerifiedPlayerManager verifiedPlayerManager;
 
   public static Spectra instance;
 
@@ -21,56 +21,20 @@ public class Spectra extends JavaPlugin {
     // Register ScriptPluginLoader
     instance = this;
 
-    PluginManager pluginManager = getServer().getPluginManager();
-    pluginManager.registerInterface(ScriptPluginLoader.class);
+    verifiedPlayerManager = new VerifiedPlayerManager(this);
 
-    // Load Spectra plugins
-    getLogger().info("Loading Spectra plugins...");
-
-    File[] plugins = getDataFolder().getParentFile().listFiles();
-
-    if (plugins == null)
-      return;
-
-    for (File file : plugins) {
-      if (!ScriptPluginLoader.isSpectraPluginFile(file.getName()))
-        continue;
-
-      try {
-        Plugin loadedPlugin = pluginManager.loadPlugin(file);
-
-        if (loadedPlugin == null) {
-          getLogger().severe("Failed to load " + file.getName());
-
-          continue;
-        }
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-    }
-
-    // Store the ScriptPluginLoader instance
-    for (Plugin plugin : pluginManager.getPlugins()) {
-      getLogger().info("Checking " + plugin.getName());
-
-      if (!(plugin instanceof ScriptPlugin))
-        continue;
-
-      pluginLoader = (ScriptPluginLoader) plugin.getPluginLoader();
-
-      break;
-    }
+    // TODO: Add a flag to disable script plugins
+    scriptPluginManager = new ScriptPluginManager(this);
+    scriptPluginManager.load();
 
     // TODO: Add a flag to disable the script manager
     scriptManager = new ScriptManager(this);
-
     // TODO: Add a flag to disable watching by default
     scriptManager.load(true);
   }
 
   @Override
   public void onEnable() {
-    // Register the command
     PluginCommand command = getCommand("scripts");
 
     if (command == null) {
@@ -83,28 +47,56 @@ public class Spectra extends JavaPlugin {
     command.setExecutor(scriptsCommand);
     command.setTabCompleter(scriptsCommand);
 
-    // Log the number of Spectra plugins loaded
-    int totalPlugins = pluginLoader == null ? 0 : pluginLoader.getPlugins().size();
-
-    getLogger().info(totalPlugins == 0 ? "No Spectra plugins loaded"
-        : totalPlugins == 1 ? "Loaded 1 Spectra plugin" : "Loaded " + totalPlugins + " Spectra plugins");
-
     // Enable scripts
-    if (scriptManager == null)
-      return;
+    if (scriptManager != null) {
+      scriptManager.enable();
+    }
 
-    scriptManager.enable();
+    if (verifiedPlayerManager != null) {
+      verifiedPlayerManager.enable();
+    }
   }
 
   @Override
   public void onDisable() {
-    if (scriptManager == null)
-      return;
+    // Disable scripts
+    if (scriptManager != null) {
+      scriptManager.disable();
+    }
 
-    scriptManager.disable();
+    if (verifiedPlayerManager != null) {
+      verifiedPlayerManager.disable();
+    }
   }
 
   public ScriptManager getScriptManager() {
     return scriptManager;
+  }
+
+  public ScriptPluginManager getScriptPluginManager() {
+    return scriptPluginManager;
+  }
+
+  @Override
+  public BiomeProvider getDefaultBiomeProvider(String worldName, String id) {
+    BiomeProvider biomeProvider = scriptManager.getDefaultBiomeProvider(worldName,
+        id);
+
+    if (biomeProvider != null) {
+      return biomeProvider;
+    }
+
+    return super.getDefaultBiomeProvider(worldName, id);
+  }
+
+  @Override
+  public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
+    ChunkGenerator chunkGenerator = scriptManager.getDefaultWorldGenerator(worldName, id);
+
+    if (chunkGenerator != null) {
+      return chunkGenerator;
+    }
+
+    return super.getDefaultWorldGenerator(worldName, id);
   }
 }

@@ -1,4 +1,4 @@
-package com.mathhulk.spectra.plugin;
+package com.mathhulk.spectra.plugins;
 
 import java.io.File;
 import java.io.InputStream;
@@ -13,9 +13,12 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginLogger;
+import org.graalvm.polyglot.Value;
 
-import com.mathhulk.spectra.Script;
 import com.mathhulk.spectra.Spectra;
+import com.mathhulk.spectra.scripts.Script;
+import com.mathhulk.spectra.scripts.wrappers.BiomeProviderWrapper;
+import com.mathhulk.spectra.scripts.wrappers.ChunkGeneratorWrapper;
 
 public class ScriptPlugin implements Plugin {
   private Script script;
@@ -59,8 +62,7 @@ public class ScriptPlugin implements Plugin {
 
   @Override
   public void onLoad() {
-    // TODO: Implement
-    script.enable();
+    script.load();
   }
 
   @Override
@@ -122,12 +124,48 @@ public class ScriptPlugin implements Plugin {
 
   @Override
   public BiomeProvider getDefaultBiomeProvider(String worldName, String id) {
-    return Spectra.instance.getDefaultBiomeProvider(worldName, id);
+    synchronized (script.getContext()) {
+      Value member = script.getMember("getDefaultBiomeProvider");
+
+      if (!member.canExecute()) {
+        return null;
+      }
+
+      try {
+        Value value = member.execute(worldName, id);
+
+        if (!value.hasMembers()) {
+          return null;
+        }
+
+        return new BiomeProviderWrapper(script.getContext(), value);
+      } catch (Exception e) {
+        return null;
+      }
+    }
   }
 
   @Override
   public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
-    return Spectra.instance.getDefaultWorldGenerator(worldName, id);
+    synchronized (script.getContext()) {
+      Value member = script.getMember("getDefaultWorldGenerator");
+
+      if (!member.canExecute()) {
+        return null;
+      }
+
+      try {
+        Value value = member.execute(worldName, id);
+
+        if (!value.hasMembers()) {
+          return null;
+        }
+
+        return new ChunkGeneratorWrapper(script.getContext(), value);
+      } catch (Exception e) {
+        return null;
+      }
+    }
   }
 
   @Override

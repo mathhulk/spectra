@@ -4,15 +4,26 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
 
+import com.mathhulk.spectra.scripts.Script;
+import com.mathhulk.spectra.scripts.ScriptManager;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ScriptsCommand implements CommandExecutor, TabCompleter {
   private final Spectra plugin;
 
+  private final String OPEN_BROWSER_CHANNEL = "spectra:open-browser";
+
   public ScriptsCommand(Spectra plugin) {
     this.plugin = plugin;
+
+    plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, OPEN_BROWSER_CHANNEL);
   }
 
   @Override
@@ -148,13 +159,35 @@ public class ScriptsCommand implements CommandExecutor, TabCompleter {
       scriptManager.enable();
     }
 
+    if (firstArgument.equals("open")) {
+      if (!(sender instanceof Player)) {
+        sender.sendMessage("This command can only be used by players.");
+
+        return true;
+      }
+
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      DataOutputStream dos = new DataOutputStream(baos);
+
+      try {
+        dos.writeInt(0);
+        dos.flush();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+      byte[] message = baos.toByteArray();
+
+      ((Player) sender).sendPluginMessage(plugin, OPEN_BROWSER_CHANNEL, message);
+    }
+
     return true;
   }
 
   @Override
   public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
     if (args.length == 1) {
-      return List.of("start-watching", "stop-watching", "list", "enable", "disable", "remove", "add");
+      return List.of("start-watching", "stop-watching", "list", "enable", "disable", "remove", "add", "open");
     }
 
     if (args.length == 2 && List.of("enable", "disable", "remove", "add").contains(args[0])) {

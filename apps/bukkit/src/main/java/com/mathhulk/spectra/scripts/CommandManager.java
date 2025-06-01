@@ -1,4 +1,4 @@
-package com.mathhulk.spectra;
+package com.mathhulk.spectra.scripts;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Server;

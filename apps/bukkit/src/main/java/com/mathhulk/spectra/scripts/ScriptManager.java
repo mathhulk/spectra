@@ -1,4 +1,4 @@
-package com.mathhulk.spectra;
+package com.mathhulk.spectra.scripts;
 
 import java.io.File;
 import java.nio.file.*;
@@ -8,6 +8,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.bukkit.Bukkit;
+import org.bukkit.generator.BiomeProvider;
+import org.bukkit.generator.ChunkGenerator;
+import org.graalvm.polyglot.Value;
+
+import com.mathhulk.spectra.Spectra;
+import com.mathhulk.spectra.scripts.wrappers.BiomeProviderWrapper;
+import com.mathhulk.spectra.scripts.wrappers.ChunkGeneratorWrapper;
 
 public class ScriptManager {
   private final Spectra plugin;
@@ -264,5 +271,56 @@ public class ScriptManager {
     enabled = false;
 
     return true;
+  }
+
+  public BiomeProvider getDefaultBiomeProvider(String worldName, String id) {
+    ArrayList<Script> scripts = getScripts();
+
+    for (Script script : scripts) {
+      synchronized (script.getContext()) {
+        Value defaultBiomeProvider = script.getMember("getDefaultBiomeProvider");
+
+        if (!defaultBiomeProvider.canExecute()) {
+          continue;
+        }
+
+        Value result = defaultBiomeProvider.execute(worldName, id);
+
+        if (!result.hasMembers()) {
+          continue;
+        }
+
+        // Return the first valid BiomeProvider found
+        return new BiomeProviderWrapper(script.getContext(), result);
+      }
+    }
+
+    return null;
+  }
+
+  public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
+    ArrayList<Script> scripts = getScripts();
+
+    // TODO: Script order
+    for (Script script : scripts) {
+      synchronized (script.getContext()) {
+        Value defaultWorldGenerator = script.getMember("getDefaultWorldGenerator");
+
+        if (!defaultWorldGenerator.canExecute()) {
+          continue;
+        }
+
+        Value result = defaultWorldGenerator.execute(worldName, id);
+
+        if (!result.hasMembers()) {
+          continue;
+        }
+
+        // Return the first valid ChunkGenerator found
+        return new ChunkGeneratorWrapper(script.getContext(), result);
+      }
+    }
+
+    return null;
   }
 }
