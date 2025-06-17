@@ -20,6 +20,7 @@ import org.cef.CefClient;
 import org.cef.browser.CefMessageRouter;
 
 import java.net.URI;
+import java.util.function.Supplier;
 
 public class BrowserScreen extends Screen {
     private static final int BROWSER_DRAW_OFFSET = 0;
@@ -28,14 +29,16 @@ public class BrowserScreen extends Screen {
 
     private MCEFBrowser browser;
 
-    public BrowserScreen(Component component, ResourceManager resourceManager) {
-        super(component);
+    public BrowserScreen(ResourceManager resourceManager) {
+        super(Component.empty());
+
         this.resourceManager = resourceManager;
     }
 
     @Override
     protected void init() {
         super.init();
+
         if (browser == null) {
             CefApp appHandle = MCEF.getApp().getHandle();
 
@@ -54,9 +57,9 @@ public class BrowserScreen extends Screen {
             appHandle.registerSchemeHandlerFactory("ui", "menu", new MySchemeHandlerFactory(resourceManager));
 
             browser = new ScaledBrowser(client, "ui://menu/test-menu.html", true);
-
-            resizeBrowser();
         }
+
+        resizeBrowser();
     }
 
     private double getScaleFactor() {
@@ -102,13 +105,8 @@ public class BrowserScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int i, int j, float f) {
         //. super.render(guiGraphics, i, j, f);
+
         RenderSystem.disableDepthTest();
-
-//        RenderSystem.bindTexture(browser.getRenderer().getTextureID());
-//        RenderSystem.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//        RenderSystem.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//        RenderSystem.bindTexture(0);
-
         RenderSystem.setShader(CoreShaders.POSITION_TEX_COLOR);
         RenderSystem.setShaderTexture(0, browser.getRenderer().getTextureID());
         Tesselator t = Tesselator.getInstance();

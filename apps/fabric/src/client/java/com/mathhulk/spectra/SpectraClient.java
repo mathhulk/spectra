@@ -1,24 +1,34 @@
 package com.mathhulk.spectra;
 
+import com.mathhulk.spectra.browser.BrowserLayer;
 import com.mathhulk.spectra.browser.BrowserScreen;
 import com.mathhulk.spectra.ui.*;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.HudLayerRegistrationCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.IdentifiedLayer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 
+import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
 
 public class SpectraClient implements ClientModInitializer {
   private static final Logger log = LoggerFactory.getLogger(SpectraClient.class);
 
-  private ResourceManager resourceManager;
+  private static final ResourceLocation EXAMPLE_LAYER = ResourceLocation.fromNamespaceAndPath("spectra", "hud-example-layer");
+
+  private final static ArrayList<BrowserLayer> browserLayers = new ArrayList<>();
+
+  private static ResourceManager resourceManager;
 
   @Override
   public void onInitializeClient() {
@@ -34,24 +44,32 @@ public class SpectraClient implements ClientModInitializer {
       ClientPlayNetworking.registerReceiver(OpenBrowserS2CPayload.TYPE, (payload, context) -> openBrowser());
 
       String serverAddress = handler.getConnection().getRemoteAddress().toString();
-        resourceManager = new ResourceManager(serverAddress);
+      resourceManager = new ResourceManager(serverAddress);
     });
 
     ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
       ServerboundCustomPayloadPacket packet = new ServerboundCustomPayloadPacket(new HandshakeC2SPayload(0));
       sender.sendPacket(packet);
+
+      browserLayers.add(new BrowserLayer(resourceManager));
     });
 
     ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
       if (resourceManager != null) {
-        log.info("Disconnecting from server, disposing of resource manager.");
-
         resourceManager.dispose();
       }
     });
+
+    HudLayerRegistrationCallback.EVENT.register(layeredDrawer -> layeredDrawer.attachLayerBefore(IdentifiedLayer.BOSS_BAR, EXAMPLE_LAYER, SpectraClient::render));
   }
 
   private void openBrowser() {
-    Minecraft.getInstance().setScreen(new BrowserScreen(Component.empty(), resourceManager));
+    Minecraft.getInstance().setScreen(new BrowserScreen(resourceManager));
+  }
+
+  private static void render(GuiGraphics graphics, DeltaTracker deltaTracker) {
+    for (BrowserLayer browserLayer : browserLayers) {
+        browserLayer.render(graphics, deltaTracker);
+    }
   }
 }

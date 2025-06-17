@@ -25,6 +25,10 @@ public class ResourceManager {
     private final HashMap<Integer, ArrayList<ResourceS2CPayload>> payloads = new HashMap<>();
     private HashMap<Integer, String> resources;
 
+    private float progress = 0F;
+    private int resourceCount = 0;
+    private String task = "Initializing";
+
     public ResourceManager(String serverAddress) {
         this.resourcesPath = Minecraft.getInstance().gameDirectory.toPath().resolve(
                 Path.of("spectra_data", "resources", serverAddress)
@@ -32,6 +36,14 @@ public class ResourceManager {
 
         ClientPlayNetworking.registerGlobalReceiver(ResourcesS2CPayload.TYPE, this::handleResources);
         ClientPlayNetworking.registerGlobalReceiver(ResourceS2CPayload.TYPE, this::handleResource);
+    }
+
+    public String getTask() {
+        return task;
+    }
+
+    public float getProgress() {
+        return progress;
     }
 
     public Path getResourcesPath() {
@@ -47,6 +59,11 @@ public class ResourceManager {
      * @param context  The networking context.
      */
     private void handleResources(ResourcesS2CPayload payload, ClientPlayNetworking.Context context) {
+        Minecraft.getInstance().setScreen(new LoadingScreen(this, Minecraft.getInstance().screen));
+
+        this.progress = 10;
+        this.task = "Syncing resources";
+
         HashMap<String, String> existingResources = getResources();
         HashMap<String, String> payloadResources = payload.resources();
 
@@ -71,7 +88,7 @@ public class ResourceManager {
             requestedResources.put(id, filePath);
         }
 
-        // Remove existing resources that are not in the payload
+        // Remove existing resources that are no longer referenced
         for (String filePath : existingResources.keySet()) {
             try {
                 Path targetPath = resourcesPath.resolve(filePath).normalize();
@@ -81,12 +98,24 @@ public class ResourceManager {
             }
         }
 
-        log.info("Resources to request: {}", requestedResources);
+        // If there are no resources to request, we can close the loading screen
+        if (requestedResources.isEmpty()) {
+            this.progress = 100;
 
+            Minecraft.getInstance().setScreen(null);
+
+            return;
+        }
+
+        // Request additional resources
         ServerboundCustomPayloadPacket packet = new ServerboundCustomPayloadPacket(new ResourcesC2SPayload(requestedResources));
         context.responseSender().sendPacket(packet);
 
+        this.progress = 20;
+        this.task = "Requesting additional resources";
+
         resources = requestedResources;
+        resourceCount = requestedResources.size();
     }
 
     /**
@@ -101,6 +130,9 @@ public class ResourceManager {
         // Check if the resource ID is already known
         ArrayList<ResourceS2CPayload> existingPayloads = payloads.computeIfAbsent(payload.id(), k -> new ArrayList<>());
         existingPayloads.add(payload);
+
+        this.task = "Downloading resource: " + resources.get(payload.id()) + " (" + existingPayloads.size() + "/" + payload.length() + ")";
+        this.progress = this.progress + ((float) 1 / payload.length()) * ((float) 80 / resourceCount);
 
         // If the resource is not complete, we wait for more chunks
         if (existingPayloads.size() != payload.length()) {
@@ -125,6 +157,12 @@ public class ResourceManager {
 
         // Remove the resource from the known resources and payloads
         payloads.remove(payload.id());
+        resources.remove(payload.id());
+
+        // If there are no more resources to process, close the loading screen
+        if (resources.isEmpty()) {
+            Minecraft.getInstance().setScreen(null);
+        }
 
         boolean success = writePath(filePath, content);
         if (success) return;

@@ -118,6 +118,10 @@ public class ScreenManager implements PluginMessageListener {
     }
 
     try {
+      if (file.length() == 0) {
+        return;
+      }
+
       String fileId = getFileId(file);
       String fileHash = getFileHash(file);
       resources.put(fileId, fileHash);
