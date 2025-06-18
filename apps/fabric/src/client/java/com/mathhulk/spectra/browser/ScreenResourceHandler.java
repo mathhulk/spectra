@@ -1,7 +1,6 @@
 package com.mathhulk.spectra.browser;
 
-import com.mathhulk.spectra.ui.ResourceManager;
-import net.minecraft.client.Minecraft;
+import com.mathhulk.spectra.ui.ServerManager;
 import org.cef.callback.CefCallback;
 import org.cef.handler.CefResourceHandler;
 import org.cef.misc.IntRef;
@@ -13,7 +12,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -23,10 +21,10 @@ public class ScreenResourceHandler implements CefResourceHandler {
     private String mimeType;
     private int responseLength;
 
-    private final ResourceManager resourceManager;
+    private final ServerManager serverManager;
 
-    public ScreenResourceHandler(ResourceManager resourceManager) {
-        this.resourceManager = resourceManager;
+    public ScreenResourceHandler(ServerManager serverManager) {
+        this.serverManager = serverManager;
     }
 
     @Override
@@ -34,14 +32,14 @@ public class ScreenResourceHandler implements CefResourceHandler {
         String url = request.getURL();
         String requestPath = url.substring("ui://menu/".length());
 
-        if (resourceManager.isPathInvalid(requestPath)) {
+        if (serverManager.getResourceManager().isPathInvalid(requestPath)) {
             // Invalid path, continue without processing
             callback.Continue();
             return false;
         }
 
         // Resolve the file path based on the request
-        Path filePath = resourceManager.getResourcesPath().resolve(requestPath).normalize();
+        Path filePath = serverManager.getResourceManager().getResourcesPath().resolve(requestPath).normalize();
 
         try {
             byte[] data = Files.readAllBytes(filePath);

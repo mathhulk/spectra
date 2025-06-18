@@ -1,11 +1,12 @@
 package com.mathhulk.spectra.ui;
 
+import com.mathhulk.spectra.ui.payloads.ResourceS2CPayload;
+import com.mathhulk.spectra.ui.payloads.ResourcesC2SPayload;
+import com.mathhulk.spectra.ui.payloads.ResourcesS2CPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -18,10 +19,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class ResourceManager {
-    private static final Logger log = LoggerFactory.getLogger(ResourceManager.class);
-
-    private final Path resourcesPath;
-
     private final HashMap<Integer, ArrayList<ResourceS2CPayload>> payloads = new HashMap<>();
     private HashMap<Integer, String> resources;
 
@@ -29,13 +26,25 @@ public class ResourceManager {
     private int resourceCount = 0;
     private String task = "Initializing";
 
-    public ResourceManager(String serverAddress) {
-        this.resourcesPath = Minecraft.getInstance().gameDirectory.toPath().resolve(
-                Path.of("spectra_data", "resources", serverAddress)
-        );
+    private final ServerManager serverManager;
+
+    public static void initialize() {
+        PayloadTypeRegistry.playS2C().register(ResourcesS2CPayload.TYPE, ResourcesS2CPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(ResourcesC2SPayload.TYPE, ResourcesC2SPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(ResourceS2CPayload.TYPE, ResourceS2CPayload.CODEC);
+    }
+
+    public ResourceManager(ServerManager serverManager) {
+        this.serverManager = serverManager;
 
         ClientPlayNetworking.registerGlobalReceiver(ResourcesS2CPayload.TYPE, this::handleResources);
         ClientPlayNetworking.registerGlobalReceiver(ResourceS2CPayload.TYPE, this::handleResource);
+    }
+
+    public Path getResourcesPath() {
+        return Minecraft.getInstance().gameDirectory.toPath().resolve(
+                Path.of("spectra_data", "resources", serverManager.getServer())
+        );
     }
 
     public String getTask() {
@@ -46,17 +55,13 @@ public class ResourceManager {
         return progress;
     }
 
-    public Path getResourcesPath() {
-        return resourcesPath;
-    }
-
     /**
      * Handles the resources payload from the server.
      * It checks if the resources already exist and if they match the expected hash.
      * If not, it adds them to the resources map for further processing.
      *
-     * @param payload  The resources payload containing file paths and their hashes.
-     * @param context  The networking context.
+     * @param payload The resources payload containing file paths and their hashes.
+     * @param context The networking context.
      */
     private void handleResources(ResourcesS2CPayload payload, ClientPlayNetworking.Context context) {
         Minecraft.getInstance().setScreen(new LoadingScreen(this, Minecraft.getInstance().screen));
@@ -91,7 +96,7 @@ public class ResourceManager {
         // Remove existing resources that are no longer referenced
         for (String filePath : existingResources.keySet()) {
             try {
-                Path targetPath = resourcesPath.resolve(filePath).normalize();
+                Path targetPath = getResourcesPath().resolve(filePath).normalize();
                 Files.delete(targetPath);
             } catch (IOException e) {
                 // TODO: Error handling
@@ -123,8 +128,8 @@ public class ResourceManager {
      * If the payload is complete, it writes the resource to the file system.
      * If the payload is a chunk, it accumulates chunks until the full resource is received.
      *
-     * @param payload  The resource payload containing the resource data.
-     * @param context  The networking context.
+     * @param payload The resource payload containing the resource data.
+     * @param context The networking context.
      */
     private void handleResource(ResourceS2CPayload payload, ClientPlayNetworking.Context context) {
         // Check if the resource ID is already known
@@ -171,6 +176,7 @@ public class ResourceManager {
     }
 
     public boolean isPathInvalid(String filePath) {
+        Path resourcesPath = getResourcesPath();
         Path targetPath = resourcesPath.resolve(filePath).normalize();
         return !targetPath.startsWith(resourcesPath);
     }
@@ -180,7 +186,7 @@ public class ResourceManager {
             return false;
         }
 
-        Path targetPath = resourcesPath.resolve(filePath).normalize();
+        Path targetPath = getResourcesPath().resolve(filePath).normalize();
 
         try {
             Files.createDirectories(targetPath.getParent());
@@ -197,7 +203,7 @@ public class ResourceManager {
      *
      * @param file The file to compute the hash for.
      * @return The MD5 hash of the file as a hex string.
-     * @throws IOException If an I/O error occurs while reading the file.
+     * @throws IOException              If an I/O error occurs while reading the file.
      * @throws NoSuchAlgorithmException If the MD5 algorithm is not available.
      */
     private String getFileHash(File file) throws IOException, NoSuchAlgorithmException {
@@ -262,7 +268,7 @@ public class ResourceManager {
      * @return The file ID as a string.
      */
     private String getFileId(File file) {
-        return file.getPath().substring(resourcesPath.toString().length() + 1)
+        return file.getPath().substring(getResourcesPath().toString().length() + 1)
                 .replace(File.separator, "/");
     }
 
@@ -274,7 +280,7 @@ public class ResourceManager {
      */
     private HashMap<String, String> getResources() {
         HashMap<String, String> resources = new HashMap<>();
-        fillResources(resources, resourcesPath.toFile());
+        fillResources(resources, getResourcesPath().toFile());
         return resources;
     }
 

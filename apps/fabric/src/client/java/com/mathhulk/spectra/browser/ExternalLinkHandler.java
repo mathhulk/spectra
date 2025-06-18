@@ -10,19 +10,10 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 
 public class ExternalLinkHandler extends CefRequestHandlerAdapter {
-    private static final Logger log = LoggerFactory.getLogger(ExternalLinkHandler.class);
-    public String host;
-
-    public ExternalLinkHandler(String host) {
-        this.host = host;
-    }
-
     public boolean isExternalLink(String url) {
-        // Parse the URL into components
         try {
             URI uri = new URI(url);
-
-            return (uri.getScheme().equals("http") || uri.getScheme().equals("https")) && !uri.getHost().equals(host);
+            return !uri.getScheme().equals("ui");
         } catch (Exception e) {
             return false;
         }
@@ -35,11 +26,11 @@ public class ExternalLinkHandler extends CefRequestHandlerAdapter {
                 String os = System.getProperty("os.name").toLowerCase();
 
                 if (os.contains("mac")) {
-                    // macOS specific handling
+                    // macOS-specific handling
                     String[] cmd = {"open", request.getURL()};
                     Runtime.getRuntime().exec(cmd);
                 } else if (os.contains("win")) {
-                    // Windows specific handling
+                    // Windows-specific handling
                     String[] cmd = {"cmd.exe", "/c", "start", request.getURL()};
                     Runtime.getRuntime().exec(cmd);
                 } else {
@@ -47,10 +38,8 @@ public class ExternalLinkHandler extends CefRequestHandlerAdapter {
                     String[] cmd = {"xdg-open", request.getURL()};
                     Runtime.getRuntime().exec(cmd);
                 }
-
-//                Desktop.getDesktop().browse(new URI(request.getURL()));
             } catch (Exception e) {
-                log.error(e.toString());
+                return false;
             }
 
             return true;

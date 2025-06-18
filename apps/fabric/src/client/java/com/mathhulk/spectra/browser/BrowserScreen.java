@@ -4,6 +4,7 @@ import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
 import com.cinemamod.mcef.MCEFClient;
 import com.mathhulk.spectra.ui.ResourceManager;
+import com.mathhulk.spectra.ui.ServerManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -23,16 +24,27 @@ import java.net.URI;
 import java.util.function.Supplier;
 
 public class BrowserScreen extends Screen {
-    private static final int BROWSER_DRAW_OFFSET = 0;
-
-    private final ResourceManager resourceManager;
+    private final ServerManager serverManager;
+    private final String resource;
+    private final Screen parent;
 
     private MCEFBrowser browser;
 
-    public BrowserScreen(ResourceManager resourceManager) {
+    public BrowserScreen(ServerManager serverManager, String resource) {
+        this(serverManager, resource, null);
+    }
+
+    public BrowserScreen(ServerManager serverManager, String resource, Screen parent) {
         super(Component.empty());
 
-        this.resourceManager = resourceManager;
+        this.serverManager = serverManager;
+        this.resource = resource;
+        this.parent = parent;
+    }
+
+    public void postMessage(String message) {
+        if (browser == null) return;
+        browser.getMainFrame().executeJavaScript("window.postMessage('" + message + "', '*');", browser.getURL(), 0);
     }
 
     @Override
@@ -41,9 +53,7 @@ public class BrowserScreen extends Screen {
 
         if (browser == null) {
             CefApp appHandle = MCEF.getApp().getHandle();
-
-            MCEFClient client = MCEF.getClient();
-            CefClient clientHandle = client.getHandle();
+            CefClient clientHandle = MCEF.getClient().getHandle();
 
             // Communicate between Java and JavaScript
             CefMessageRouter router = CefMessageRouter.create();
@@ -51,43 +61,35 @@ public class BrowserScreen extends Screen {
             clientHandle.addMessageRouter(router);
 
             // Open external links in the system browser
-            // clientHandle.addRequestHandler(new ExternalLinkHandler(uri.getHost()));
+            clientHandle.addRequestHandler(new ExternalLinkHandler());
 
-            // Load local views
-            appHandle.registerSchemeHandlerFactory("ui", "menu", new MySchemeHandlerFactory(resourceManager));
+            // Load local resources
+            appHandle.registerSchemeHandlerFactory("ui", "server", new MySchemeHandlerFactory(serverManager));
 
-            browser = new ScaledBrowser(client, "ui://menu/test-menu.html", true);
+            browser = MCEF.createBrowser("ui://server/" + resource, true);
+
+            resizeBrowser();
         }
-
-        resizeBrowser();
-    }
-
-    private double getScaleFactor() {
-        return minecraft.getWindow().getGuiScale() / ScaledBrowser.getDeviceScaleFactor();
     }
 
     private int mouseX(double x) {
-        return (int) ((x - BROWSER_DRAW_OFFSET) * getScaleFactor());
+        return (int) (x * Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private int mouseY(double y) {
-        return (int) ((y - BROWSER_DRAW_OFFSET) * getScaleFactor());
+        return (int) (y * Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private int scaleX(double x) {
-        return (int) ((x - BROWSER_DRAW_OFFSET * 2) * getScaleFactor());
+        return (int) (x * Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private int scaleY(double y) {
-        return (int) ((y - BROWSER_DRAW_OFFSET * 2) * getScaleFactor());
+        return (int) (y * Minecraft.getInstance().getWindow().getGuiScale());
     }
 
     private void resizeBrowser() {
         browser.resize(scaleX(width), scaleY(height));
-
-//        if (width > 100 && height > 100) {
-//            browser.resize(scaleX(width), scaleY(height));
-//        }
     }
 
     @Override
@@ -100,21 +102,25 @@ public class BrowserScreen extends Screen {
     public void onClose() {
         browser.close();
         super.onClose();
+
+        if (parent != null) {
+            Minecraft.getInstance().setScreen(parent);
+        }
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int i, int j, float f) {
-        //. super.render(guiGraphics, i, j, f);
+        // super.render(guiGraphics, i, j, f);
 
         RenderSystem.disableDepthTest();
         RenderSystem.setShader(CoreShaders.POSITION_TEX_COLOR);
         RenderSystem.setShaderTexture(0, browser.getRenderer().getTextureID());
         Tesselator t = Tesselator.getInstance();
         BufferBuilder buffer = t.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
-        buffer.addVertex(BROWSER_DRAW_OFFSET, height - BROWSER_DRAW_OFFSET, 0).setUv(0.0f, 1.0f).setColor(255, 255, 255, 255);
-        buffer.addVertex(width - BROWSER_DRAW_OFFSET, height - BROWSER_DRAW_OFFSET, 0).setUv(1.0f, 1.0f).setColor(255, 255, 255, 255);
-        buffer.addVertex(width - BROWSER_DRAW_OFFSET, BROWSER_DRAW_OFFSET, 0).setUv(1.0f, 0.0f).setColor(255, 255, 255, 255);
-        buffer.addVertex(BROWSER_DRAW_OFFSET, BROWSER_DRAW_OFFSET, 0).setUv(0.0f, 0.0f).setColor(255, 255, 255, 255);
+        buffer.addVertex(0, height, 0).setUv(0.0f, 1.0f).setColor(255, 255, 255, 255);
+        buffer.addVertex(width, height, 0).setUv(1.0f, 1.0f).setColor(255, 255, 255, 255);
+        buffer.addVertex(width, 0, 0).setUv(1.0f, 0.0f).setColor(255, 255, 255, 255);
+        buffer.addVertex(0, 0, 0).setUv(0.0f, 0.0f).setColor(255, 255, 255, 255);
         BufferUploader.drawWithShader(buffer.build());
         RenderSystem.setShaderTexture(0, 0);
         RenderSystem.enableDepthTest();

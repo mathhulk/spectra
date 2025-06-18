@@ -1,4 +1,4 @@
-package com.mathhulk.spectra.ui;
+package com.mathhulk.spectra.ui.payloads;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
