@@ -1,4 +1,4 @@
-package com.mathhulk.spectra;
+package com.mathhulk.spectra.scripts;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -43,9 +43,15 @@ public class TaskManager {
 
   public long setInterval(Runnable runnable, long delay) {
     long ticks = delay / 1000 * TICKS_PER_SECOND;
-
     Plugin plugin = script.getPlugin();
-    BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, runnable, ticks, ticks);
+
+    Runnable synchronizedRunnable = () -> {
+      synchronized (script.getContext()) {
+        runnable.run();
+      }
+    };
+
+    BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, synchronizedRunnable, ticks, ticks);
     tasks.put(taskId, task);
 
     return taskId++;
@@ -63,9 +69,15 @@ public class TaskManager {
 
   public long setTimeout(Runnable runnable, long delay) {
     long ticks = delay / 1000 * TICKS_PER_SECOND;
-
     Plugin plugin = script.getPlugin();
-    BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, runnable, ticks);
+
+    Runnable synchronizedRunnable = () -> {
+      synchronized (script.getContext()) {
+        runnable.run();
+      }
+    };
+
+    BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, synchronizedRunnable, ticks);
     tasks.put(taskId, task);
 
     return taskId++;

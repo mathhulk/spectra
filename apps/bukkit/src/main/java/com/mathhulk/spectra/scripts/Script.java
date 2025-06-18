@@ -1,9 +1,10 @@
-package com.mathhulk.spectra;
+package com.mathhulk.spectra.scripts;
 
 import org.bukkit.plugin.Plugin;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.io.IOAccess;
 
 import java.io.File;
 
@@ -31,6 +32,10 @@ public class Script {
     this.plugin = plugin;
 
     name = file.getName();
+  }
+
+  public Context getContext() {
+    return context;
   }
 
   public File getFile() {
@@ -68,6 +73,7 @@ public class Script {
     // TODO: Security
     context = Context.newBuilder(language)
         .allowAllAccess(true)
+        .allowIO(IOAccess.newBuilder().fileSystem(null).build())
         .option("js.esm-eval-returns-exports", "true")
         .option("engine.WarnInterpreterOnly", "false")
         .build();
@@ -106,18 +112,27 @@ public class Script {
     }
   }
 
-  public Boolean enable() {
-    // Load the script
-    load();
+  public Value getMember(String name) {
+    if (!loaded)
+      return null;
 
+    synchronized (context) {
+      return exports.getMember(name);
+    }
+  }
+
+  public Boolean enable() {
     if (!loaded)
       return false;
 
-    // Execute the onEnable event
-    Value enableEvent = exports.getMember("onEnable");
+    synchronized (context) {
+      // Execute the onEnable event
+      Value value = exports.getMember("onEnable");
 
-    if (enableEvent != null)
-      enableEvent.executeVoid();
+      if (value != null && value.canExecute()) {
+        value.executeVoid();
+      }
+    }
 
     enabled = true;
 
@@ -128,11 +143,14 @@ public class Script {
     if (!loaded)
       return false;
 
-    // Execute the onDisable event
-    Value disableEvent = exports.getMember("onDisable");
+    synchronized (context) {
+      // Execute the onDisable event
+      Value value = exports.getMember("onDisable");
 
-    if (disableEvent != null)
-      disableEvent.executeVoid();
+      if (value != null && value.canExecute()) {
+        value.executeVoid();
+      }
+    }
 
     // Remove event listeners, commands, and tasks
     taskManager.removeTasks();

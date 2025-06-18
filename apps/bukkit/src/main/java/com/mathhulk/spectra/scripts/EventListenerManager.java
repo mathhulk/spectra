@@ -1,4 +1,4 @@
-package com.mathhulk.spectra;
+package com.mathhulk.spectra.scripts;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;

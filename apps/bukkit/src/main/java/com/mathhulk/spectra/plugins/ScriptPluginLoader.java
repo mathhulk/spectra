@@ -1,4 +1,4 @@
-package com.mathhulk.spectra.plugin;
+package com.mathhulk.spectra.plugins;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -14,8 +14,8 @@ import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginLoader;
 import org.bukkit.plugin.RegisteredListener;
 
-import com.mathhulk.spectra.Script;
 import com.mathhulk.spectra.Spectra;
+import com.mathhulk.spectra.scripts.Script;
 
 public class ScriptPluginLoader implements PluginLoader {
   private static final Pattern[] pluginFileFilters = new Pattern[] {
