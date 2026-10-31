@@ -5,3 +5,7 @@ dependencies {
     "api"("org.graalvm.polyglot:polyglot:$graalVersion")
     "implementation"("org.graalvm.polyglot:js:$graalVersion")
 }
+
+dependencies {
+    "testImplementation"(testFixtures(project(":core")))
+}

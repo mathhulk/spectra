@@ -19,17 +19,17 @@ import java.util.concurrent.Executor;
 import java.util.logging.Logger;
 
 /** Deterministic platform: the "main thread" is whoever calls {@link #tick()}. */
-final class FakePlatform implements Platform {
+public final class FakePlatform implements Platform {
   private record Task(Runnable runnable, long[] due, long period, boolean[] cancelled) {
   }
 
-  final Path dataDirectory;
-  final Map<UUID, List<ClientboundPacket>> sent = new HashMap<>();
-  final Set<UUID> kicked = new HashSet<>();
+  public final Path dataDirectory;
+  public final Map<UUID, List<ClientboundPacket>> sent = new HashMap<>();
+  public final Set<UUID> kicked = new HashSet<>();
   private final List<Task> tasks = new ArrayList<>();
   private long now;
 
-  FakePlatform(Path dataDirectory) {
+  public FakePlatform(Path dataDirectory) {
     this.dataDirectory = dataDirectory;
   }
 
@@ -61,7 +61,7 @@ final class FakePlatform implements Platform {
     return () -> task.cancelled()[0] = true;
   }
 
-  void tick() {
+  public void tick() {
     now++;
     for (Task task : List.copyOf(tasks)) {
       if (task.cancelled()[0] || task.due()[0] > now) {
@@ -77,14 +77,14 @@ final class FakePlatform implements Platform {
     tasks.removeIf(task -> task.cancelled()[0]);
   }
 
-  void ticks(int count) {
+  public void ticks(int count) {
     for (int i = 0; i < count; i++) {
       tick();
     }
   }
 
   @SuppressWarnings("unchecked")
-  <T extends ClientboundPacket> List<T> drain(UUID player, Class<T> type) {
+  public <T extends ClientboundPacket> List<T> drain(UUID player, Class<T> type) {
     List<T> matches = new ArrayList<>();
     Iterator<ClientboundPacket> iterator = sent.getOrDefault(player, new ArrayList<>()).iterator();
     while (iterator.hasNext()) {
