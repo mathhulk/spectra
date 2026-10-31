@@ -1,0 +1,7 @@
+name: Spectra
+version: ${version}
+main: com.mathhulk.spectra.paper.SpectraPlugin
+api-version: "26.3"
+description: Server-side TypeScript/JavaScript scripting and server-driven web UIs.
+website: https://mathhulk.github.io/spectra
+authors: [mathhulk]

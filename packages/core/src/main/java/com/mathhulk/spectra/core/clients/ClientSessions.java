@@ -97,7 +97,12 @@ public final class ClientSessions {
 
   public void handleHello(UUID player, Hello hello) {
     Session session = sessions.get(player);
-    if (session == null || session.info.isResolved()) {
+    if (session == null) {
+      // The Hello raced the platform's join event; start the session now.
+      join(player);
+      session = sessions.get(player);
+    }
+    if (session.info.isResolved()) {
       // Duplicate or late Hello: ignore rather than letting a client flip its own status.
       return;
     }

@@ -1,67 +1,65 @@
+import { createHash } from "crypto";
 import { createWriteStream } from "fs";
-import { Readable } from "stream";
-import { finished } from "stream/promises";
+import { rename, rm } from "fs/promises";
+import { Readable, Transform } from "stream";
+import { pipeline } from "stream/promises";
 import Repository from "./repository.js";
 
-interface PaperVersions {
-  version_groups: string[];
-  versions: string[];
-}
+// PaperMC's Fill API (v3). The v2 API was sunset and returns HTTP 410.
+const API = "https://fill.papermc.io/v3/projects/paper";
 
-interface PaperBuild {
-  build: number;
-}
-
-interface PaperBuilds {
-  builds: PaperBuild[];
-}
-
-const getPaperBuilds = async (version: string) => {
-  const response = await fetch(
-    `https://api.papermc.io/v2/projects/paper/versions/${version}/builds`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-
-  return data as PaperBuilds;
+// Fill asks clients to identify themselves.
+const HEADERS = {
+  "User-Agent": "spectra-sdk (https://github.com/mathhulk/spectra)",
 };
 
-const getPaperVersions = async () => {
-  const response = await fetch(`https://api.papermc.io/v2/projects/paper`);
+interface ProjectResponse {
+  /** Version groups (newest first) mapped to their versions (newest first). */
+  versions: Record<string, string[]>;
+}
+
+interface BuildResponse {
+  id: number;
+  channel: "STABLE" | "BETA" | "ALPHA" | "RECOMMENDED";
+  downloads: Record<
+    string,
+    { name: string; url: string; size: number; checksums: { sha256: string } }
+  >;
+}
+
+const getJson = async <T>(url: string): Promise<T> => {
+  const response = await fetch(url, { headers: HEADERS });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch: ${response.statusText}`);
+    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json();
+  return (await response.json()) as T;
+};
 
-  return data as PaperVersions;
+const isRelease = (version: string) => /^\d+(\.\d+)*$/.test(version);
+
+const getVersions = async () => {
+  const { versions } = await getJson<ProjectResponse>(API);
+
+  return Object.values(versions).flat();
 };
 
 const paper: Repository = {
   getVersions: async () => {
     try {
-      const { versions } = await getPaperVersions();
-      return versions;
+      return await getVersions();
     } catch (error) {
-      throw new Error("Failed to get Paper versions", {
-        cause: error,
-      });
+      throw new Error("Failed to get Paper versions", { cause: error });
     }
   },
 
   getLatestVersion: async () => {
     try {
-      const { versions } = await getPaperVersions();
+      const latest = (await getVersions()).find(isRelease);
+      if (!latest) throw new Error("No release versions found");
 
-      const latestVersion = versions.pop();
-      if (!latestVersion) throw new Error("No versions found");
-
-      return latestVersion;
+      return latest;
     } catch (error) {
       throw new Error("Failed to get the latest Paper version", {
         cause: error,
@@ -71,34 +69,47 @@ const paper: Repository = {
 
   downloadVersion: async (serverPath: string, version: string) => {
     try {
-      // Get the latest build for the specified version
-      const { builds } = await getPaperBuilds(version);
-
-      const latestBuild = builds.toSorted((a, b) => a.build - b.build).pop();
-      if (!latestBuild) throw new Error("No builds found");
-
-      // Download the latest build
-      const fileName = `paper-${version}-${latestBuild.build}.jar`;
-
-      const response = await fetch(
-        `https://api.papermc.io/v2/projects/paper/versions/${version}/builds/${latestBuild.build}/downloads/${fileName}`
+      const build = await getJson<BuildResponse>(
+        `${API}/versions/${encodeURIComponent(version)}/builds/latest`
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.statusText}`);
+      const download = build.downloads["server:default"];
+      if (!download) throw new Error(`Build ${build.id} has no server download`);
+
+      const response = await fetch(download.url, { headers: HEADERS });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Failed to download ${download.url}: ${response.status}`);
       }
 
-      if (!response.body) {
-        throw new Error("No response body");
+      // Write to a temporary file and verify the checksum before replacing the server jar.
+      const hash = createHash("sha256");
+      const temporaryPath = `${serverPath}.download`;
+
+      await pipeline(
+        Readable.fromWeb(response.body),
+        new Transform({
+          transform(chunk, _encoding, callback) {
+            hash.update(chunk);
+            callback(null, chunk);
+          },
+        }),
+        createWriteStream(temporaryPath)
+      );
+
+      const digest = hash.digest("hex");
+
+      if (digest !== download.checksums.sha256) {
+        await rm(temporaryPath, { force: true });
+
+        throw new Error(
+          `Checksum mismatch for ${download.name}: expected ${download.checksums.sha256}, got ${digest}`
+        );
       }
 
-      const stream = createWriteStream(serverPath);
-      const pipe = Readable.fromWeb(response.body).pipe(stream);
-      await finished(pipe);
+      await rename(temporaryPath, serverPath);
     } catch (error) {
-      throw new Error("Failed to download Paper version", {
-        cause: error,
-      });
+      throw new Error("Failed to download Paper version", { cause: error });
     }
   },
 };
