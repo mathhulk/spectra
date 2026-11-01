@@ -38,3 +38,8 @@ tasks.named<ProcessResources>("processResources") {
     inputs.properties(props)
     filesMatching("fabric.mod.json") { expand(props) }
 }
+
+// Gson (bundled with Minecraft) references Error Prone annotations that are not on the classpath.
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-Xlint:-classfile")
+}

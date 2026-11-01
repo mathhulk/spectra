@@ -6,7 +6,6 @@ import com.mathhulk.spectra.protocol.ServerboundPacket;
 import com.mathhulk.spectra.protocol.clientbound.Layout;
 import com.mathhulk.spectra.protocol.clientbound.OpenView;
 import com.mathhulk.spectra.protocol.serverbound.ViewEvent;
-import com.mathhulk.spectra.protocol.serverbound.ViewPost;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.Minecraft;
@@ -15,13 +14,16 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
-/** One server-opened view and its browser. Client thread, except the {@link BrowserHost.Owner} callbacks. */
+/** A full-screen view and its browser. Client thread, except the {@link BrowserHost.Owner} callbacks. */
 public final class BrowserView implements BrowserHost.Owner {
   private final OpenView spec;
   private final String origin;
   private final BrowserHost host;
   private final Consumer<ServerboundPacket> send;
+  private final Queries queries;
+  private final Predicate<String> network;
   private final RinkuBrowser browser;
   private boolean visible;
   private volatile boolean closed;
@@ -29,11 +31,14 @@ public final class BrowserView implements BrowserHost.Owner {
   private int pixelWidth = -1;
   private int pixelHeight = -1;
 
-  BrowserView(OpenView spec, String origin, BrowserHost host, Consumer<ServerboundPacket> send) {
+  BrowserView(OpenView spec, String origin, BrowserHost host, Consumer<ServerboundPacket> send, Queries queries,
+      Predicate<String> network) {
     this.spec = spec;
     this.origin = origin;
     this.host = host;
     this.send = send;
+    this.queries = queries;
+    this.network = network;
     this.visible = spec.visible();
     this.browser = Rinku.createBrowser("https://" + origin + "/" + spec.resource(), true);
     host.track(browser, this);
@@ -65,16 +70,26 @@ public final class BrowserView implements BrowserHost.Owner {
   }
 
   @Override
-  public void onPost(String json) {
-    Minecraft.getInstance().execute(() -> {
-      if (!closed) {
-        send.accept(new ViewPost(spec.viewId(), json));
-      }
+  public boolean allowsNetwork(String url) {
+    return network.test(url);
+  }
+
+  @Override
+  public void onQuery(org.cef.browser.CefFrame frame, String request, boolean persistent,
+      org.cef.callback.CefQueryCallback callback) {
+    if (closed) {
+      callback.failure(410, "View closed");
+      return;
+    }
+    queries.handle(spec.viewId(), request, callback, () -> {
     });
   }
 
   @Override
-  public void onLoaded(int httpStatus) {
+  public void onLoaded(org.cef.browser.CefFrame frame, int httpStatus) {
+    if (!frame.isMain()) {
+      return;
+    }
     Minecraft.getInstance().execute(() -> {
       if (closed || reportedOpen) {
         return;
@@ -87,7 +102,10 @@ public final class BrowserView implements BrowserHost.Owner {
   }
 
   @Override
-  public void onFailed(String reason) {
+  public void onFailed(org.cef.browser.CefFrame frame, String reason) {
+    if (!frame.isMain()) {
+      return;
+    }
     Minecraft.getInstance().execute(() -> {
       if (!closed) {
         reportedOpen = true;

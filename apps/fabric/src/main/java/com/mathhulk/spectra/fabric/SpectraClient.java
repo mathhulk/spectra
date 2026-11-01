@@ -27,12 +27,14 @@ public final class SpectraClient implements ClientModInitializer {
   private BrowserHost browsers;
   private ObjectStore store;
   private String modVersion;
+  private ClientSettings settings;
   private ServerConnection connection;
 
   @Override
   public void onInitializeClient() {
     modVersion = FabricLoader.getInstance().getModContainer("spectra")
         .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
+    settings = ClientSettings.load(LOGGER);
     browsers = new BrowserHost(LOGGER);
     store = new ObjectStore(FabricLoader.getInstance().getGameDir().resolve("spectra").resolve("objects"));
 
@@ -61,7 +63,7 @@ public final class SpectraClient implements ClientModInitializer {
   private void connect() {
     Minecraft.getInstance().execute(() -> {
       disconnect();
-      connection = new ServerConnection(browsers, store, SpectraClient::send, LOGGER, modVersion);
+      connection = new ServerConnection(browsers, store, SpectraClient::send, LOGGER, modVersion, settings);
     });
   }
 

@@ -1,7 +1,5 @@
 package com.mathhulk.spectra.fabric.browser;
 
-import com.mathhulk.spectra.fabric.resources.ResourceSync;
-import com.mathhulk.spectra.protocol.Limits;
 import com.mathhulk.spectra.protocol.ResourceHash;
 import de.keksuccino.rinku.Rinku;
 import net.minecraft.client.Minecraft;
@@ -15,6 +13,7 @@ import org.cef.handler.CefLoadHandler;
 import org.cef.handler.CefLoadHandlerAdapter;
 import org.cef.handler.CefMessageRouterHandlerAdapter;
 import org.cef.handler.CefRequestHandlerAdapter;
+import org.cef.handler.CefResourceHandler;
 import org.cef.handler.CefResourceRequestHandler;
 import org.cef.handler.CefResourceRequestHandlerAdapter;
 import org.cef.misc.BoolRef;
@@ -32,27 +31,37 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code https://<server-specific host>.spectra.invalid/}: a real https origin (so relative URLs, fetch, modules,
  * and storage behave normally) that never touches the network, isolated per server.
  *
- * <p>For browsers Spectra created, navigation is pinned to the page's own origin, every network request outside
- * it is cancelled, and external links only open after the player confirms them. Browsers created by other mods
- * are left alone.
+ * <p>For browsers Spectra created: navigation is pinned to the page's origin, network requests outside it are
+ * cancelled unless the server's {@code NetworkPolicy} allows them (and the player has not turned that off), and
+ * external links only open after the player confirms them. Browsers created by other mods are left alone.
  */
 public final class BrowserHost {
   private static final String DOMAIN = ".spectra.invalid";
 
-  /** A Spectra browser's link back to its view. Callbacks arrive on CEF threads. */
+  /** A Spectra browser's link back to its view(s). Callbacks arrive on CEF threads. */
   public interface Owner {
     String origin();
 
-    void onPost(String json);
+    /** Whether a request to {@code url} (outside the origin) is allowed by the server's policy and the player. */
+    boolean allowsNetwork(String url);
 
-    void onLoaded(int httpStatus);
+    /** A {@code window.cefQuery} from {@code frame}; the bridge sends JSON envelopes. */
+    void onQuery(CefFrame frame, String request, boolean persistent, CefQueryCallback callback);
 
-    void onFailed(String reason);
+    void onLoaded(CefFrame frame, int httpStatus);
+
+    void onFailed(CefFrame frame, String reason);
+  }
+
+  /** Serves every request to one server's origin (static resources, the API tunnel, built-in endpoints). */
+  @FunctionalInterface
+  public interface Origin {
+    CefResourceHandler handle(CefBrowser browser, CefFrame frame, CefRequest request);
   }
 
   private final Logger logger;
   private final Map<Integer, Owner> owners = new ConcurrentHashMap<>();
-  private final Map<String, ResourceSync> hosts = new ConcurrentHashMap<>();
+  private final Map<String, Origin> hosts = new ConcurrentHashMap<>();
   private boolean installed;
 
   public BrowserHost(Logger logger) {
@@ -83,12 +92,12 @@ public final class BrowserHost {
     installed = true;
   }
 
-  public void serve(String host, ResourceSync resources) {
-    if (hosts.put(host, resources) == null) {
+  public void serve(String host, Origin origin) {
+    if (hosts.put(host, origin) == null) {
       Rinku.getApp().getHandle().registerSchemeHandlerFactory("https", host,
           (browser, frame, scheme, request) -> {
-            ResourceSync current = hosts.get(host);
-            return current == null ? null : new ResourceHandler(current);
+            Origin current = hosts.get(host);
+            return current == null ? null : current.handle(browser, frame, request);
           });
     }
   }
@@ -105,7 +114,7 @@ public final class BrowserHost {
     owners.remove(browser.getIdentifier());
   }
 
-  private static boolean sameOrigin(String url, String origin) {
+  static boolean sameOrigin(String url, String origin) {
     try {
       URI uri = URI.create(url);
       return "https".equals(uri.getScheme()) && origin.equalsIgnoreCase(uri.getHost()) && uri.getPort() == -1;
@@ -127,24 +136,22 @@ public final class BrowserHost {
       if (owner == null) {
         return false;
       }
-      if (request.getBytes(StandardCharsets.UTF_8).length > Limits.MAX_SERVERBOUND_JSON) {
-        callback.failure(413, "Message too large");
-        return true;
-      }
-      owner.onPost(request);
-      callback.success("");
+      owner.onQuery(frame, request, persistent, callback);
       return true;
     }
   }
 
   private final class Requests extends CefRequestHandlerAdapter {
-    private final CefResourceRequestHandler blockOutside = new CefResourceRequestHandlerAdapter() {
+    private final CefResourceRequestHandler filter = new CefResourceRequestHandlerAdapter() {
       @Override
       public boolean onBeforeResourceLoad(CefBrowser browser, CefFrame frame, CefRequest request) {
         Owner owner = owners.get(browser.getIdentifier());
         String url = request.getURL();
-        // Returning true cancels the request.
-        return owner != null && !sameOrigin(url, owner.origin()) && !inlineScheme(url);
+        if (owner == null || sameOrigin(url, owner.origin()) || inlineScheme(url) || owner.allowsNetwork(url)) {
+          return false;
+        }
+        logger.debug("Blocked a Spectra view request to {}", url);
+        return true; // Cancel.
       }
     };
 
@@ -152,7 +159,7 @@ public final class BrowserHost {
     public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request, boolean userGesture,
         boolean isRedirect) {
       Owner owner = owners.get(browser.getIdentifier());
-      if (owner == null || sameOrigin(request.getURL(), owner.origin())) {
+      if (owner == null || sameOrigin(request.getURL(), owner.origin()) || inlineScheme(request.getURL())) {
         return false;
       }
       String url = request.getURL();
@@ -174,7 +181,7 @@ public final class BrowserHost {
     public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame,
         CefRequest request, boolean isNavigation, boolean isDownload, String requestInitiator,
         BoolRef disableDefaultHandling) {
-      return owners.containsKey(browser.getIdentifier()) ? blockOutside : null;
+      return owners.containsKey(browser.getIdentifier()) ? filter : null;
     }
   }
 
@@ -182,8 +189,8 @@ public final class BrowserHost {
     @Override
     public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
       Owner owner = owners.get(browser.getIdentifier());
-      if (owner != null && frame.isMain()) {
-        owner.onLoaded(httpStatusCode);
+      if (owner != null) {
+        owner.onLoaded(frame, httpStatusCode);
       }
     }
 
@@ -191,8 +198,8 @@ public final class BrowserHost {
     public void onLoadError(CefBrowser browser, CefFrame frame, CefLoadHandler.ErrorCode errorCode, String errorText,
         String failedUrl) {
       Owner owner = owners.get(browser.getIdentifier());
-      if (owner != null && frame.isMain() && errorCode != CefLoadHandler.ErrorCode.ERR_ABORTED) {
-        owner.onFailed(errorCode + " " + errorText);
+      if (owner != null && errorCode != CefLoadHandler.ErrorCode.ERR_ABORTED) {
+        owner.onFailed(frame, errorCode + " " + errorText);
       }
     }
   }

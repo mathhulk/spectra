@@ -1,33 +1,61 @@
 package com.mathhulk.spectra.fabric.views;
 
 import com.mathhulk.spectra.fabric.browser.BrowserHost;
+import com.mathhulk.spectra.fabric.net.ApiTunnel;
 import com.mathhulk.spectra.protocol.ServerboundPacket;
 import com.mathhulk.spectra.protocol.clientbound.OpenView;
 import com.mathhulk.spectra.protocol.clientbound.ViewKind;
 import com.mathhulk.spectra.protocol.serverbound.ViewEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.Screen;
+import org.cef.browser.CefBrowser;
+import org.cef.browser.CefFrame;
 
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
-/** Every view one server opened. Client thread only. */
+/**
+ * Every view one server opened: screens (one browser each) and HUD layers (iframes in one shared overlay browser
+ * per HUD slot). Client thread only, except {@link #viewIdFor}.
+ */
 public final class ViewManager {
+  private static final String TOP = "top";
+
   private final BrowserHost host;
   private final String origin;
   private final Consumer<ServerboundPacket> send;
-  private final Map<String, BrowserView> views = new LinkedHashMap<>();
+  private final ApiTunnel tunnel;
+  private final Queries queries;
+  private final Predicate<String> network;
+  private final Map<String, BrowserView> screens = new LinkedHashMap<>();
+  private final Map<String, HudOverlay> overlays = new HashMap<>();
+  /** Screen browser id -> view id, for requests arriving on CEF threads. */
+  private final Map<Integer, String> screenBrowsers = new java.util.concurrent.ConcurrentHashMap<>();
 
-  public ViewManager(BrowserHost host, String origin, Consumer<ServerboundPacket> send) {
+  public ViewManager(BrowserHost host, String origin, Consumer<ServerboundPacket> send, ApiTunnel tunnel,
+      Predicate<String> network) {
     this.host = host;
     this.origin = origin;
     this.send = send;
+    this.tunnel = tunnel;
+    this.queries = new Queries(send, tunnel);
+    this.network = network;
+  }
+
+  /** Which view a request came from: the iframe name for layers, the screen's view id otherwise. */
+  public String viewIdFor(CefBrowser browser, CefFrame frame) {
+    if (frame != null && !frame.isMain() && !frame.getName().isEmpty()) {
+      return frame.getName();
+    }
+    return screenBrowsers.get(browser.getIdentifier());
+  }
+
+  private static String slot(OpenView spec) {
+    return Objects.requireNonNullElse(HudLayers.slotFor(spec.after().orElse(null)), TOP);
   }
 
   public void open(OpenView spec) {
@@ -37,49 +65,68 @@ public final class ViewManager {
       send.accept(new ViewEvent(spec.viewId(), ViewEvent.Type.FAILED, "browser unavailable"));
       return;
     }
-    BrowserView view = new BrowserView(spec, origin, host, send);
-    views.put(spec.viewId(), view);
-    if (spec.kind() == ViewKind.SCREEN) {
-      Minecraft minecraft = Minecraft.getInstance();
-      if (minecraft.gui.screen() instanceof ViewScreen current) {
-        current.markClosedByServer();
-        views.remove(current.view().id());
-        current.view().close();
-      }
-      minecraft.gui.setScreen(new ViewScreen(view, this));
+    if (spec.kind() == ViewKind.LAYER) {
+      overlays.computeIfAbsent(slot(spec), key -> new HudOverlay(origin, host, send, queries, network)).put(spec);
+      return;
     }
+    BrowserView view = new BrowserView(spec, origin, host, send, queries, network);
+    screens.put(spec.viewId(), view);
+    screenBrowsers.put(view.browser().getIdentifier(), spec.viewId());
+    Minecraft minecraft = Minecraft.getInstance();
+    if (minecraft.gui.screen() instanceof ViewScreen current) {
+      current.markClosedByServer();
+      closeScreen(current.view());
+    }
+    minecraft.gui.setScreen(new ViewScreen(view, this));
   }
 
   public void setVisible(String viewId, boolean visible) {
-    BrowserView view = views.get(viewId);
-    if (view != null) {
-      view.setVisible(visible);
+    BrowserView screen = screens.get(viewId);
+    if (screen != null) {
+      screen.setVisible(visible);
     }
+    overlays.values().forEach(overlay -> overlay.setVisible(viewId, visible));
   }
 
   public void close(String viewId) {
-    BrowserView view = views.remove(viewId);
-    if (view == null) {
-      return;
+    tunnel.closeView(viewId);
+    BrowserView screen = screens.get(viewId);
+    if (screen != null) {
+      Minecraft minecraft = Minecraft.getInstance();
+      if (minecraft.gui.screen() instanceof ViewScreen current && current.view() == screen) {
+        current.markClosedByServer();
+        minecraft.gui.setScreen(null);
+      }
+      closeScreen(screen);
     }
-    Minecraft minecraft = Minecraft.getInstance();
-    if (minecraft.gui.screen() instanceof ViewScreen screen && screen.view() == view) {
-      screen.markClosedByServer();
-      minecraft.gui.setScreen(null);
-    }
+    overlays.entrySet().removeIf(entry -> {
+      HudOverlay overlay = entry.getValue();
+      if (overlay.remove(viewId) && overlay.isEmpty()) {
+        overlay.close();
+        return true;
+      }
+      return false;
+    });
+  }
+
+  private void closeScreen(BrowserView view) {
+    screens.remove(view.id(), view);
+    screenBrowsers.remove(view.browser().getIdentifier());
     view.close();
   }
 
   /** Delivers JSON to one view, or to every view when {@code viewId} is empty. */
   public void message(String viewId, String json) {
     if (viewId.isEmpty()) {
-      views.values().forEach(view -> view.post(json));
-    } else {
-      BrowserView view = views.get(viewId);
-      if (view != null) {
-        view.post(json);
-      }
+      screens.values().forEach(view -> view.post(json));
+      overlays.values().forEach(overlay -> overlay.viewIds().forEach(id -> overlay.post(id, json)));
+      return;
     }
+    BrowserView screen = screens.get(viewId);
+    if (screen != null) {
+      screen.post(json);
+    }
+    overlays.values().forEach(overlay -> overlay.post(viewId, json));
   }
 
   void screenRemoved(BrowserView view, boolean closedByServer) {
@@ -87,35 +134,30 @@ public final class ViewManager {
       return;
     }
     // The player closed the screen (Escape, or another screen replaced it).
-    views.remove(view.id(), view);
-    view.close();
+    tunnel.closeView(view.id());
+    closeScreen(view);
     send.accept(new ViewEvent(view.id(), ViewEvent.Type.CLOSED, "player"));
   }
 
-  /** Draws visible layers attached after {@code after} (null = on top of the HUD), lowest zIndex first. */
-  public void drawLayers(GuiGraphicsExtractor graphics, String after) {
-    List<BrowserView> layers = new ArrayList<>();
-    for (BrowserView view : views.values()) {
-      if (view.spec().kind() == ViewKind.LAYER && view.visible()
-          && Objects.equals(HudLayers.slotFor(view.spec().after().orElse(null)), after)) {
-        layers.add(view);
-      }
-    }
-    layers.sort(Comparator.comparingInt(view -> view.spec().zIndex()));
-    for (BrowserView view : layers) {
-      int[] rect = BrowserView.place(view.spec().layout(), graphics.guiWidth(), graphics.guiHeight());
-      view.draw(graphics, rect[0], rect[1], rect[2], rect[3]);
+  /** Draws the overlay for a HUD slot ({@code null} = on top of the HUD). */
+  public void drawLayers(GuiGraphicsExtractor graphics, String slot) {
+    HudOverlay overlay = overlays.get(slot == null ? TOP : slot);
+    if (overlay != null) {
+      overlay.draw(graphics);
     }
   }
 
   public void dispose() {
+    tunnel.closeView(null);
     Minecraft minecraft = Minecraft.getInstance();
-    Screen screen = minecraft.gui.screen();
-    if (screen instanceof ViewScreen viewScreen) {
+    if (minecraft.gui.screen() instanceof ViewScreen viewScreen) {
       viewScreen.markClosedByServer();
       minecraft.gui.setScreen(null);
     }
-    views.values().forEach(BrowserView::close);
-    views.clear();
+    screens.values().forEach(BrowserView::close);
+    screens.clear();
+    screenBrowsers.clear();
+    overlays.values().forEach(HudOverlay::close);
+    overlays.clear();
   }
 }
