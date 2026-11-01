@@ -22,3 +22,8 @@ scripts:
 resources:
   # Upload budget per player per tick, in bytes (128 KiB/tick = 2.5 MiB/s).
   bytes-per-tick: 131072
+
+types:
+  # Generate TypeScript declarations for Paper and every installed plugin at startup, into
+  # <server>/.spectra/types/server.d.ts. spectra-sdk copies them into your project during development.
+  generate: true

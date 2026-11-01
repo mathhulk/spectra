@@ -82,6 +82,11 @@ public final class SpectraPlugin extends JavaPlugin implements Listener, PluginM
         "server", getServer()));
 
     server.start();
+    if (getConfig().getBoolean("types.generate", true)) {
+      // After every plugin has enabled, so their APIs are included.
+      Bukkit.getScheduler().runTask(this, () -> Bukkit.getScheduler().runTaskAsynchronously(this,
+          () -> TypeGeneration.run(this, serverDirectory, getLogger())));
+    }
     for (Player player : Bukkit.getOnlinePlayers()) {
       server.join(player.getUniqueId());
     }

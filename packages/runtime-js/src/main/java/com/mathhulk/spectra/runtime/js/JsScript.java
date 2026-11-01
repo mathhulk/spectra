@@ -95,9 +95,10 @@ final class JsScript implements ScriptInstance {
     callExport("onDisable");
   }
 
-  /** Reads an exported value (used by adapters for hooks like world generators). Null when absent. */
-  Value export(String member) {
-    return exports == null ? null : exports.getMember(member);
+  @Override
+  public Object export(String member) {
+    Value value = exports == null ? null : exports.getMember(member);
+    return value == null || value.isNull() ? null : value;
   }
 
   @Override
