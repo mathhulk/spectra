@@ -8,7 +8,6 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.IOAccess;
 
 import java.io.IOException;
@@ -50,9 +49,7 @@ final class JsScript implements ScriptInstance {
           .allowPolyglotAccess(PolyglotAccess.NONE)
           .allowCreateThread(false)
           .allowNativeAccess(false)
-          .allowIO(IOAccess.newBuilder()
-              .fileSystem(FileSystem.newReadOnlyFileSystem(FileSystem.newDefaultFileSystem()))
-              .build())
+          .allowIO(IOAccess.newBuilder().fileSystem(new ModuleFileSystem(language.builtins())).build())
           .allowExperimentalOptions(true)
           .option("js.esm-eval-returns-exports", "true")
           .option("js.ecmascript-version", "latest")
@@ -70,6 +67,8 @@ final class JsScript implements ScriptInstance {
       for (Map.Entry<String, Object> global : globals.create(scope).entrySet()) {
         bindings.putMember(global.getKey(), global.getValue());
       }
+      bindings.putMember("__spectraNative", language.natives(scope));
+      context.eval(language.prelude());
 
       exports = context.eval(source);
       return null;
