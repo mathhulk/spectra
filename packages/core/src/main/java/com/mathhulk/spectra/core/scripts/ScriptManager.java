@@ -238,6 +238,22 @@ public final class ScriptManager implements AutoCloseable {
     return error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
   }
 
+  /** A script's export together with the scope that guards calls into it. */
+  public record Export(String script, ScriptScope scope, Object value) {
+  }
+
+  /** Every loaded script's {@code name} export, in script order. Main thread only. */
+  public List<Export> exports(String name) {
+    List<Export> exports = new ArrayList<>();
+    for (Loaded loaded : scripts.values()) {
+      Object value = loaded.scope.invoke("export " + name, () -> loaded.instance.export(name), null);
+      if (value != null) {
+        exports.add(new Export(loaded.name, loaded.scope, value));
+      }
+    }
+    return exports;
+  }
+
   public List<ScriptStatus> list() {
     return scripts.values().stream()
         .map(loaded -> new ScriptStatus(loaded.name, loaded.language.name(), loaded.enabled)).toList();

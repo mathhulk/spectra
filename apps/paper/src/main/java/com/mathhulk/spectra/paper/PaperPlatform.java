@@ -22,7 +22,11 @@ final class PaperPlatform implements Platform {
   private final MainThread mainThread = new MainThread() {
     @Override
     public boolean isMainThread() {
-      return Bukkit.isPrimaryThread();
+      boolean main = Bukkit.isPrimaryThread();
+      if (main) {
+        com.mathhulk.spectra.paper.world.ScriptChunkGenerator.observeServerThread();
+      }
+      return main;
     }
 
     @Override

@@ -23,7 +23,14 @@ public final class ScriptScope {
   private final String scriptName;
   private final Logger logger;
   private final Deque<Registration> resources = new ArrayDeque<>();
-  private final ReentrantLock lock = new ReentrantLock();
+  /** Exposes the owner so callers can detect "the main thread holds this script" and avoid deadlocks. */
+  private static final class OwnedLock extends ReentrantLock {
+    Thread owner() {
+      return getOwner();
+    }
+  }
+
+  private final OwnedLock lock = new OwnedLock();
   private volatile boolean disposed;
 
   public ScriptScope(String scriptName, Logger logger) {
@@ -64,6 +71,31 @@ public final class ScriptScope {
     lock.lock();
     try {
       return call.get();
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /** The thread holding this script's lock, or null. */
+  public Thread owner() {
+    return lock.owner();
+  }
+
+  /** True when {@code thread} currently holds this script's lock. */
+  public boolean isHeldBy(Thread thread) {
+    return lock.owner() == thread;
+  }
+
+  /**
+   * Runs {@code call} under the lock if it can be acquired within {@code millis}; empty otherwise. Lets a worker
+   * thread notice that the lock is held by a thread waiting on it, instead of deadlocking.
+   */
+  public <T> java.util.Optional<T> tryLocked(Supplier<T> call, long millis) throws InterruptedException {
+    if (!lock.tryLock(millis, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+      return java.util.Optional.empty();
+    }
+    try {
+      return java.util.Optional.ofNullable(call.get());
     } finally {
       lock.unlock();
     }

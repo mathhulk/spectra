@@ -33,7 +33,7 @@ final class ScriptEvents {
 
   static AddEventListener add(Plugin plugin, ScriptScope scope) {
     return (eventClass, handler, options) -> {
-      if (!Event.class.isAssignableFrom(eventClass)) {
+      if (eventClass == null || !Event.class.isAssignableFrom(eventClass)) {
         throw new IllegalArgumentException(eventClass.getName() + " is not a Bukkit event");
       }
       if (options.length > 2) {
@@ -49,6 +49,7 @@ final class ScriptEvents {
       };
       Bukkit.getPluginManager().registerEvent(type, listener, priority, (ignored, event) -> {
         if (type.isInstance(event)) {
+          com.mathhulk.spectra.paper.world.ScriptChunkGenerator.observeServerThread();
           scope.invoke(what, () -> handler.accept(event));
         }
       }, plugin, ignoreCancelled);

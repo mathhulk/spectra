@@ -9,6 +9,11 @@ client:
   kick-message: "This server requires the Spectra client mod."
   # How long to wait for a client handshake before treating a player as unsupported (ticks).
   handshake-timeout-ticks: 100
+  # Internet origins your views may contact directly (fetch, WebSocket, images), e.g. a map tile server.
+  # Views can always reach this server through fetch('/api/...'). Players can turn direct access off.
+  network-allow: []
+  #  - "https://api.example.com"
+  #  - "https://*.tiles.example.com"
 
 scripts:
   # Reload scripts and resources automatically when their files change.

@@ -11,6 +11,14 @@ public interface ScriptInstance extends AutoCloseable {
   /** Calls the script's disable hook, if any. Never throws past the manager; errors are logged. */
   void disable() throws Exception;
 
+  /**
+   * A value the script exports (for example a world generator factory), as the language's own handle, or null.
+   * Adapters must call into it through the script's {@link ScriptScope#invoke} lock.
+   */
+  default Object export(String name) {
+    return null;
+  }
+
   /** Releases the language runtime (contexts, VMs). The script's scope is disposed separately. */
   @Override
   void close();

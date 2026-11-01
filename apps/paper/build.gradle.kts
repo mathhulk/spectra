@@ -20,6 +20,9 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
     archiveClassifier.set("")
     // Truffle discovers languages through service files; they must be merged, not overwritten.
     mergeServiceFiles()
+    // Shadow 9 drops duplicate entries before transformers run unless they are let through; without this only
+    // the first jar's service file survives and Truffle cannot find the regex engine.
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
     // GraalJS ships as named modules; module descriptors are meaningless once shaded into a plugin jar.
     exclude("module-info.class", "META-INF/versions/*/module-info.class")
 }

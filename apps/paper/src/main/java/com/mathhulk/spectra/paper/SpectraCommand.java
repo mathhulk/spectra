@@ -1,6 +1,6 @@
 package com.mathhulk.spectra.paper;
 
-import com.mathhulk.spectra.core.clients.ClientInfo;
+import com.mathhulk.spectra.api.clients.ClientInfo;
 import com.mathhulk.spectra.core.scripts.ScriptManager;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -72,7 +72,7 @@ final class SpectraCommand implements BasicCommand {
       }
       case "resources" -> {
         plugin.server().rescanResources();
-        var snapshot = plugin.server().resources().snapshot();
+        var snapshot = plugin.server().resourceSync().snapshot();
         sender.sendMessage("Resources: generation " + snapshot.generation() + ", " + snapshot.entries().size()
             + " files (rescan requested).");
       }
