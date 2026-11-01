@@ -1,7 +1,7 @@
 package com.mathhulk.spectra.core.resources;
 
 import com.mathhulk.spectra.core.Listeners;
-import com.mathhulk.spectra.core.platform.Cancellable;
+import com.mathhulk.spectra.api.Registration;
 import com.mathhulk.spectra.core.platform.Platform;
 import com.mathhulk.spectra.protocol.Limits;
 import com.mathhulk.spectra.protocol.Packets;
@@ -67,7 +67,7 @@ public final class ResourceService {
     this.synced = new Listeners<>(platform.logger(), "resources synced");
   }
 
-  public Cancellable onSynced(Consumer<? super Synced> listener) {
+  public Registration onSynced(Consumer<? super Synced> listener) {
     return synced.add(listener);
   }
 

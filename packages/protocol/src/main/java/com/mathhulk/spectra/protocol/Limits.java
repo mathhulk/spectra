@@ -21,6 +21,21 @@ public final class Limits {
   public static final int MAX_CLIENTBOUND_JSON = 512 * 1024;
   public static final int MAX_SERVERBOUND_JSON = 30 * 1024;
 
+  public static final int MAX_HTTP_PATH = 2048;
+  public static final int MAX_HTTP_METHOD = 16;
+  public static final int MAX_HEADERS = 64;
+  public static final int MAX_HEADER_NAME = 128;
+  public static final int MAX_HEADER_VALUE = 8192;
+  /** Body bytes per serverbound packet; larger request bodies continue in HttpRequestBody packets. */
+  public static final int MAX_SERVERBOUND_BODY = 16 * 1024;
+  /** Body bytes per clientbound packet; larger response bodies continue in HttpResponseBody packets. */
+  public static final int MAX_CLIENTBOUND_BODY = 512 * 1024;
+  /** Socket message bytes per serverbound packet; larger messages are fragmented. */
+  public static final int MAX_SERVERBOUND_SOCKET_DATA = 24 * 1024;
+  public static final int MAX_CLIENTBOUND_SOCKET_DATA = 512 * 1024;
+  public static final int MAX_SOCKET_PROTOCOLS = 8;
+  public static final int MAX_NETWORK_ORIGINS = 64;
+
   private Limits() {
   }
 }

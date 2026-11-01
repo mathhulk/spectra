@@ -10,6 +10,12 @@ public final class Capability {
   public static final String LAYERS = "ui.layers";
   /** JSON messages between views and the server. */
   public static final String MESSAGES = "ui.messages";
+  /** HTTP requests from views to the server, tunneled over the protocol. */
+  public static final String HTTP = "http";
+  /** WebSockets from views to the server, tunneled over the protocol. */
+  public static final String SOCKETS = "sockets";
+  /** The client honors {@code NetworkPolicy} for direct internet requests from views. */
+  public static final String NETWORK = "network";
 
   private Capability() {
   }

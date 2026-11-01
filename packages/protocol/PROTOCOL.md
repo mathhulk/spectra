@@ -9,8 +9,8 @@ depends on it, so the two sides can never drift apart.
 - A single plugin-message channel, **`spectra:main`**, is used in both directions.
 - Every message is one *frame*: `VarInt packetId` followed by the packet body.
 - Frame size limits come from vanilla Minecraft:
-  - server → client: 1 MiB (`Frames.MAX_CLIENTBOUND_SIZE`)
-  - client → server: 32 KiB (`Frames.MAX_SERVERBOUND_SIZE`)
+  - server → client: 1 MiB (`Limits.MAX_CLIENTBOUND_FRAME`)
+  - client → server: 32 KiB (`Limits.MAX_SERVERBOUND_FRAME`)
 
   Packets that could exceed a limit are split by the sender (manifests, chunks, requests).
 - Unknown packet IDs are a protocol error. A newer version must bump `Protocol.VERSION`.
@@ -47,6 +47,9 @@ client                                   server
 - Capabilities are plain strings (see `Capability`). Each side advertises what it supports, and features are only used when both sides list them.
 - **Nothing is enforced by the protocol.** Server code decides whether a player without the client mod is kicked, gets a fallback, or simply sees nothing.
 - A player whose client never sends `Hello` is reported as *unsupported* after a configurable timeout.
+- The client sends `Hello` only once the server has registered `spectra:main` (via `minecraft:register`), so vanilla servers never receive Spectra packets.
+- Before the handshake completes, the server ignores every packet except `Hello`.
+- If both sides support `network`, the server follows `Welcome` with `NetworkPolicy` (see below).
 
 ## Resource sync
 
@@ -97,3 +100,51 @@ server                                   client
 - **`after`** is optional. It names the vanilla HUD element the layer should render after (for example `chat` or `hotbar`). If it's missing, the layer renders on top.
 - **Messages** are JSON text. Each side checks the JSON size and must treat the other side's data as untrusted.
 - **`ViewEvent(CLOSED)`** is sent whenever the player closes a screen themselves, for example with Escape, so server state stays accurate.
+
+## HTTP tunnel
+
+Views reach the server as if it were a web backend. A `fetch` to the view's own origin under `/api/` (for example `fetch('/api/shop/buy', { method: 'POST', body })`) never touches the network. The client tunnels it over the protocol:
+
+```
+client                                             server
+  | -- HttpRequest(id, viewId, method, path, -->     |  path includes the query, e.g. /api/shop/buy?x=1
+  |                headers, body, last)              |
+  | -- HttpRequestBody(id, data, last) ------->      |  while the body continues
+  | <-- HttpResponse(id, status, headers, -----      |
+  |                  body, last)                     |
+  | <-- HttpResponseBody(id, data, last) ------      |  while the body continues
+```
+
+- **Request ids** are chosen by the client and must be unique among its in-flight requests. The server allows 32 requests in flight per player and answers more with 429.
+- **Routing.** The server routes on the path without `/api`, longest registered prefix first. A handler may decline, which passes the request to the next match. Anything unmatched gets 404.
+- **Origin check.** Requests are only routed for views the server actually opened for that player; anything else gets 404.
+- **Size limits.**
+  - Request bodies are capped at 8 MiB and sent in 16 KiB pieces.
+  - Response bodies are capped at 32 MiB and sent in 256 KiB pieces.
+- **Timeout.** A handler that does not answer within 30 seconds produces a 504.
+
+## WebSocket tunnel
+
+`new WebSocket('/api/chat')` from a view (any URL on the view's own origin under `/api/`) is tunneled the same way:
+
+```
+client                                       server
+  | -- SocketOpen(id, viewId, path, protocols) -> |
+  | <-- SocketOpened(id, protocol) -------------- |  or SocketClosed(id, 4404, ...) if nothing handles it
+  | -- SocketSend(id, binary, data, fin) -------> |  messages, fragmented; fin ends a message
+  | <-- SocketMessage(id, binary, data, fin) ---- |
+  | -- SocketClose(id, code, reason) -----------> |  either side may close
+  | <-- SocketClosed(id, code, reason) ---------- |
+```
+
+- **Limits.** Messages are capped at 4 MiB. Each player may hold 32 sockets.
+- **Cleanup.** Closing a view closes its sockets. When a player leaves, the server closes their sockets with code 1001.
+
+## Network policy
+
+`NetworkPolicy(allowedOrigins)` lists internet origins the server's views may contact directly, so that, for example, a minimap can load tiles from the server's own map service.
+
+- Origins look like `https://api.example.com` or `https://*.tiles.example.com`. Only https/wss are allowed, and the port must match (443 when none is given).
+- A wildcard matches one or more subdomain labels, never the bare domain.
+- Without a policy, views can only reach their own origin.
+- Clients may let players disable direct network access entirely.

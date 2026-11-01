@@ -1,10 +1,13 @@
 package com.mathhulk.spectra.core;
 
-import com.mathhulk.spectra.core.clients.ClientInfo;
-import com.mathhulk.spectra.core.clients.ClientStatus;
+import com.mathhulk.spectra.api.clients.ClientInfo;
+import com.mathhulk.spectra.api.clients.ClientStatus;
+import com.mathhulk.spectra.api.http.HttpResponse;
+import com.mathhulk.spectra.api.http.WebSocket;
+import com.mathhulk.spectra.api.views.Views;
+import com.mathhulk.spectra.api.views.ViewSpec;
+import com.mathhulk.spectra.protocol.Header;
 import com.mathhulk.spectra.core.platform.MainThread;
-import com.mathhulk.spectra.core.views.ViewService;
-import com.mathhulk.spectra.core.views.ViewSpec;
 import com.mathhulk.spectra.protocol.Capability;
 import com.mathhulk.spectra.protocol.Packets;
 import com.mathhulk.spectra.protocol.Protocol;
@@ -20,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -92,7 +96,7 @@ class SpectraServerTest {
 
   @Test
   void requireClientKicksOnlyWhenOperatorOptsIn() throws Exception {
-    SpectraConfig strict = new SpectraConfig(true, OptionalInt.empty(), "need mod", 20, false, 4096);
+    SpectraConfig strict = new SpectraConfig(true, OptionalInt.empty(), "need mod", 20, false, 4096, List.of());
     SpectraServer server = start(strict);
     server.join(player);
     platform.ticks(20);
@@ -116,7 +120,7 @@ class SpectraServerTest {
     Files.write(data.resolve("resources/ui/big.bin"), big);
     Files.writeString(data.resolve("resources/index.html"), "<h1>hi</h1>");
 
-    SpectraServer server = start(new SpectraConfig(false, OptionalInt.empty(), "", 100, false, 64 * 1024));
+    SpectraServer server = start(new SpectraConfig(false, OptionalInt.empty(), "", 100, false, 64 * 1024, List.of()));
     server.join(player);
     hello(server, Protocol.VERSION, ALL);
 
@@ -158,25 +162,25 @@ class SpectraServerTest {
     hello(server, Protocol.VERSION, Set.of(Capability.RESOURCES, Capability.SCREENS, Capability.MESSAGES));
     long generation = platform.drain(player, ResourceManifest.class).getFirst().generation();
 
-    ViewService views = server.views();
-    assertEquals(ViewService.OpenResult.UNSUPPORTED,
-        views.open(player, "hud", ViewSpec.layer("shop.html", Layout.FULLSCREEN)));
-    assertEquals(ViewService.OpenResult.QUEUED, views.open(player, "shop", ViewSpec.screen("shop.html")));
+    var views = server.views();
+    assertEquals(Views.OpenResult.UNSUPPORTED,
+        views.open(player, "hud", ViewSpec.layer("shop.html", com.mathhulk.spectra.api.views.Layout.FULLSCREEN)));
+    assertEquals(Views.OpenResult.QUEUED, views.open(player, "shop", ViewSpec.screen("shop.html")));
     assertTrue(platform.drain(player, OpenView.class).isEmpty());
 
     server.handleFrame(player, Packets.encode(new ResourcesSynced(generation)));
     assertEquals("shop", platform.drain(player, OpenView.class).getFirst().viewId());
-    assertEquals(ViewService.OpenResult.SENT, views.open(player, "shop", ViewSpec.screen("shop.html")));
+    assertEquals(Views.OpenResult.SENT, views.open(player, "shop", ViewSpec.screen("shop.html")));
 
-    List<ViewService.Post> posts = new ArrayList<>();
-    views.onPost(posts::add);
+    List<Views.Message> posts = new ArrayList<>();
+    views.onMessage(posts::add);
     server.handleFrame(player, Packets.encode(new ViewPost("not-opened", "{}")));
     server.handleFrame(player, Packets.encode(new ViewPost("shop", "{\"buy\":1}")));
     assertEquals(1, posts.size());
     assertEquals("{\"buy\":1}", posts.getFirst().json());
 
     server.handleFrame(player, Packets.encode(new ViewEvent("shop", ViewEvent.Type.CLOSED, "escape")));
-    assertTrue(views.openViews(player).isEmpty());
+    assertTrue(views.open(player).isEmpty());
   }
 
   @Test
@@ -196,5 +200,131 @@ class SpectraServerTest {
     assertEquals(1, MainThread.toTicks(10, 1));
     assertEquals(0, MainThread.toTicks(0, 0));
     assertEquals(1, MainThread.toTicks(Double.NaN, 1));
+  }
+
+  /** Joins with every capability and finishes resource sync, then opens a screen so the view may talk to us. */
+  private SpectraServer readyWithView(String viewId) throws Exception {
+    Files.createDirectories(data.resolve("resources"));
+    Files.writeString(data.resolve("resources/app.html"), "app");
+    SpectraServer server = start(SpectraConfig.DEFAULTS);
+    server.join(player);
+    hello(server, Protocol.VERSION, Set.of(Capability.RESOURCES, Capability.SCREENS, Capability.MESSAGES,
+        Capability.HTTP, Capability.SOCKETS));
+    long generation = platform.drain(player, ResourceManifest.class).getFirst().generation();
+    server.handleFrame(player, Packets.encode(new ResourcesSynced(generation)));
+    server.views().open(player, viewId, ViewSpec.screen("app.html"));
+    return server;
+  }
+
+  @Test
+  void httpRequestsRouteByLongestPrefixAndReassembleBodies() throws Exception {
+    SpectraServer server = readyWithView("app");
+    server.http().route("/", request -> null); // Declines: falls through.
+    server.http().route("/shop/", request -> java.util.concurrent.CompletableFuture.completedFuture(
+        HttpResponse.json(200, "{\"got\":\"" + request.text() + "\",\"path\":\"" + request.path() + "\"}")));
+
+    server.handleFrame(player, Packets.encode(new com.mathhulk.spectra.protocol.serverbound.HttpRequest(1, "app",
+        "POST", "/api/shop/buy?item=sword", List.of(new Header("Content-Type", "text/plain")),
+        "ab".getBytes(StandardCharsets.UTF_8), false)));
+    server.handleFrame(player, Packets.encode(new HttpRequestBody(1, "cd".getBytes(StandardCharsets.UTF_8), true)));
+
+    var response = platform.drain(player, com.mathhulk.spectra.protocol.clientbound.HttpResponse.class).getFirst();
+    assertEquals(200, response.status());
+    assertTrue(response.last());
+    assertEquals("{\"got\":\"abcd\",\"path\":\"/api/shop/buy?item=sword\"}",
+        new String(response.body(), StandardCharsets.UTF_8));
+
+    // Unrouted paths, paths outside /api, and views the server never opened get 404.
+    for (String[] request : new String[][] {{"app", "/api/nothing"}, {"app", "/index.html"}, {"other", "/api/shop/x"}}) {
+      server.handleFrame(player, Packets.encode(new com.mathhulk.spectra.protocol.serverbound.HttpRequest(9,
+          request[0], "GET", request[1], List.of(), new byte[0], true)));
+      assertEquals(404, platform.drain(player, com.mathhulk.spectra.protocol.clientbound.HttpResponse.class)
+          .getFirst().status());
+    }
+  }
+
+  @Test
+  void largeResponsesAreChunked() throws Exception {
+    SpectraServer server = readyWithView("app");
+    byte[] big = new byte[600 * 1024];
+    server.http().route("/big", request -> java.util.concurrent.CompletableFuture.completedFuture(
+        HttpResponse.of(200, "application/octet-stream", big)));
+    server.handleFrame(player, Packets.encode(new com.mathhulk.spectra.protocol.serverbound.HttpRequest(2, "app",
+        "GET", "/api/big", List.of(), new byte[0], true)));
+    var head = platform.drain(player, com.mathhulk.spectra.protocol.clientbound.HttpResponse.class).getFirst();
+    var rest = platform.drain(player, HttpResponseBody.class);
+    assertFalse(head.last());
+    assertTrue(rest.getLast().last());
+    assertEquals(big.length, head.body().length + rest.stream().mapToInt(b -> b.data().length).sum());
+  }
+
+  @Test
+  void slowHandlersTimeOut() throws Exception {
+    SpectraServer server = readyWithView("app");
+    server.http().route("/slow", request -> new java.util.concurrent.CompletableFuture<>());
+    server.handleFrame(player, Packets.encode(new com.mathhulk.spectra.protocol.serverbound.HttpRequest(3, "app",
+        "GET", "/api/slow", List.of(), new byte[0], true)));
+    platform.ticks((int) com.mathhulk.spectra.core.http.HttpService.TIMEOUT_TICKS);
+    assertEquals(504, platform.drain(player, com.mathhulk.spectra.protocol.clientbound.HttpResponse.class)
+        .getFirst().status());
+  }
+
+  @Test
+  void webSocketsOpenEchoAndClose() throws Exception {
+    SpectraServer server = readyWithView("app");
+    List<String> closes = new ArrayList<>();
+    server.sockets().route("/chat", socket -> {
+      socket.onMessage(message -> socket.send("echo:" + message.text()));
+      socket.onClose(close -> closes.add(close.code() + " " + close.reason()));
+      return true;
+    });
+
+    server.handleFrame(player, Packets.encode(new SocketOpen(7, "app", "/api/chat", List.of())));
+    assertEquals(7, platform.drain(player, SocketOpened.class).getFirst().socketId());
+
+    server.handleFrame(player, Packets.encode(new SocketSend(7, false, "he".getBytes(StandardCharsets.UTF_8), false)));
+    server.handleFrame(player, Packets.encode(new SocketSend(7, false, "llo".getBytes(StandardCharsets.UTF_8), true)));
+    SocketMessage echo = platform.drain(player, SocketMessage.class).getFirst();
+    assertEquals("echo:hello", new String(echo.data(), StandardCharsets.UTF_8));
+    assertTrue(echo.fin());
+
+    server.handleFrame(player, Packets.encode(new SocketClose(7, 1000, "bye")));
+    assertEquals(List.of("1000 bye"), closes);
+
+    server.handleFrame(player, Packets.encode(new SocketOpen(8, "app", "/api/unknown", List.of())));
+    assertEquals(4404, platform.drain(player, SocketClosed.class).getFirst().code());
+  }
+
+  @Test
+  void networkPolicyIsSentToClientsThatSupportIt() throws Exception {
+    SpectraConfig config = new SpectraConfig(false, OptionalInt.empty(), "", 100, false, 4096,
+        List.of("https://api.example.com"));
+    SpectraServer server = start(config);
+    server.join(player);
+    hello(server, Protocol.VERSION, Set.of(Capability.NETWORK));
+    assertEquals(List.of("https://api.example.com"),
+        platform.drain(player, NetworkPolicy.class).getFirst().allowedOrigins());
+  }
+
+  @Test
+  void pluginResourceNamespacesAreSynced() throws Exception {
+    Path pluginUi = data.resolve("plugin-ui");
+    Files.createDirectories(pluginUi.resolve("shop"));
+    Files.writeString(pluginUi.resolve("shop/index.html"), "plugin shop");
+    SpectraServer server = start(SpectraConfig.DEFAULTS);
+    server.resources().register("myplugin", pluginUi);
+    server.join(player);
+    hello(server, Protocol.VERSION, ALL);
+    List<String> paths = platform.drain(player, ResourceManifest.class).getLast().entries().stream()
+        .map(ResourceManifest.Entry::path).toList();
+    assertTrue(paths.contains("myplugin/shop/index.html"), paths.toString());
+  }
+
+  @Test
+  void packetsBeforeTheHandshakeAreIgnored() throws Exception {
+    SpectraServer server = start(SpectraConfig.DEFAULTS);
+    server.join(player);
+    server.handleFrame(player, Packets.encode(new SocketOpen(1, "app", "/api/x", List.of())));
+    assertTrue(platform.drain(player, SocketClosed.class).isEmpty());
   }
 }

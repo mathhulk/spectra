@@ -20,14 +20,25 @@ public final class Packets {
       new Type<>(OpenView.class, OpenView::read),
       new Type<>(SetViewVisible.class, SetViewVisible::read),
       new Type<>(CloseView.class, CloseView::read),
-      new Type<>(ViewMessage.class, ViewMessage::read));
+      new Type<>(ViewMessage.class, ViewMessage::read),
+      new Type<>(HttpResponse.class, HttpResponse::read),
+      new Type<>(HttpResponseBody.class, HttpResponseBody::read),
+      new Type<>(SocketOpened.class, SocketOpened::read),
+      new Type<>(SocketMessage.class, SocketMessage::read),
+      new Type<>(SocketClosed.class, SocketClosed::read),
+      new Type<>(NetworkPolicy.class, NetworkPolicy::read));
 
   private static final List<Type<? extends ServerboundPacket>> SERVERBOUND = List.of(
       new Type<>(Hello.class, Hello::read),
       new Type<>(ResourceRequest.class, ResourceRequest::read),
       new Type<>(ResourcesSynced.class, ResourcesSynced::read),
       new Type<>(ViewPost.class, ViewPost::read),
-      new Type<>(ViewEvent.class, ViewEvent::read));
+      new Type<>(ViewEvent.class, ViewEvent::read),
+      new Type<>(HttpRequest.class, HttpRequest::read),
+      new Type<>(HttpRequestBody.class, HttpRequestBody::read),
+      new Type<>(SocketOpen.class, SocketOpen::read),
+      new Type<>(SocketSend.class, SocketSend::read),
+      new Type<>(SocketClose.class, SocketClose::read));
 
   private Packets() {
   }

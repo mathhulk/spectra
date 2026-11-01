@@ -100,4 +100,40 @@ class PacketsTest {
       assertEquals(value, new FrameReader(new FrameWriter().writeVarLong(value).toByteArray()).readVarLong());
     }
   }
+
+  @Test
+  void tunnelPacketsRoundTrip() {
+    roundTrip(new SocketOpened(1, ""));
+    roundTrip(new SocketClosed(1, 1000, "bye"));
+    roundTrip(new NetworkPolicy(List.of("https://*.example.com")));
+    roundTrip(new SocketOpen(1, "v", "/api/chat", List.of("json")));
+    roundTrip(new SocketClose(1, 1001, "gone"));
+    var request = (com.mathhulk.spectra.protocol.serverbound.HttpRequest) Packets.decodeServerbound(Packets.encode(
+        new com.mathhulk.spectra.protocol.serverbound.HttpRequest(5, "v", "POST", "/api/x?y=1",
+            List.of(new Header("X-Test", "1")), new byte[] {1, 2}, false)));
+    assertEquals("x-test", request.headers().getFirst().name());
+    assertArrayEquals(new byte[] {1, 2}, request.body());
+  }
+
+  @Test
+  void maxSizeTunnelPacketsFitTheirFrames() {
+    var body = new com.mathhulk.spectra.protocol.serverbound.HttpRequest(Integer.MAX_VALUE, "v".repeat(Limits.MAX_ID),
+        "OPTIONS", "/".repeat(Limits.MAX_HTTP_PATH), List.of(), new byte[Limits.MAX_SERVERBOUND_BODY], false);
+    assertTrue(Packets.encode(body).length <= Limits.MAX_SERVERBOUND_FRAME);
+    var send = new SocketSend(Integer.MAX_VALUE, true, new byte[Limits.MAX_SERVERBOUND_SOCKET_DATA], false);
+    assertTrue(Packets.encode(send).length <= Limits.MAX_SERVERBOUND_FRAME);
+  }
+
+  @Test
+  void networkPolicyMatchesOriginsAndWildcards() {
+    NetworkPolicy policy = new NetworkPolicy(List.of("https://api.example.com", "https://*.tiles.example.org"));
+    assertTrue(policy.allows("https://api.example.com/v1/players"));
+    assertTrue(policy.allows("wss://api.example.com/live"));
+    assertTrue(policy.allows("https://a.b.tiles.example.org/1/2/3.png"));
+    assertFalse(policy.allows("https://tiles.example.org/x"));
+    assertFalse(policy.allows("http://api.example.com/"));
+    assertFalse(policy.allows("https://api.example.com:8443/"));
+    assertFalse(policy.allows("https://evil.com/?https://api.example.com"));
+    assertFalse(policy.allows("https://api.example.com.evil.com/"));
+  }
 }

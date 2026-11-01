@@ -1,6 +1,6 @@
 package com.mathhulk.spectra.core;
 
-import com.mathhulk.spectra.core.platform.Cancellable;
+import com.mathhulk.spectra.api.Registration;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,7 +19,7 @@ public final class Listeners<T> {
     this.name = name;
   }
 
-  public Cancellable add(Consumer<? super T> listener) {
+  public Registration add(Consumer<? super T> listener) {
     listeners.add(listener);
     return () -> listeners.remove(listener);
   }

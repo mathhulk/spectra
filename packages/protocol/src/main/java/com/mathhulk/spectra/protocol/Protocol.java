@@ -6,10 +6,10 @@ public final class Protocol {
   public static final String CHANNEL = "spectra:main";
 
   /** Current protocol version. Bump on any incompatible change. */
-  public static final int VERSION = 1;
+  public static final int VERSION = 2;
 
   /** Oldest client protocol version this build can still talk to. */
-  public static final int MIN_SUPPORTED_VERSION = 1;
+  public static final int MIN_SUPPORTED_VERSION = 2;
 
   private Protocol() {
   }

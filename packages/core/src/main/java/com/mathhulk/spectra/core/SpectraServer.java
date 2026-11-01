@@ -1,7 +1,12 @@
 package com.mathhulk.spectra.core;
 
-import com.mathhulk.spectra.core.clients.ClientInfo;
+import com.mathhulk.spectra.api.Registration;
+import com.mathhulk.spectra.api.Spectra;
+import com.mathhulk.spectra.api.clients.ClientInfo;
+import com.mathhulk.spectra.api.resources.Resources;
 import com.mathhulk.spectra.core.clients.ClientSessions;
+import com.mathhulk.spectra.core.http.HttpService;
+import com.mathhulk.spectra.core.http.SocketService;
 import com.mathhulk.spectra.core.platform.Cancellable;
 import com.mathhulk.spectra.core.platform.Platform;
 import com.mathhulk.spectra.core.resources.ResourceService;
@@ -12,11 +17,7 @@ import com.mathhulk.spectra.protocol.Capability;
 import com.mathhulk.spectra.protocol.Packets;
 import com.mathhulk.spectra.protocol.ProtocolException;
 import com.mathhulk.spectra.protocol.ServerboundPacket;
-import com.mathhulk.spectra.protocol.serverbound.Hello;
-import com.mathhulk.spectra.protocol.serverbound.ResourceRequest;
-import com.mathhulk.spectra.protocol.serverbound.ResourcesSynced;
-import com.mathhulk.spectra.protocol.serverbound.ViewEvent;
-import com.mathhulk.spectra.protocol.serverbound.ViewPost;
+import com.mathhulk.spectra.protocol.serverbound.*;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,10 +30,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 
 /**
- * Platform-independent server side of Spectra: client handshakes, resource sync, and views. Adapters forward
- * joins, quits, and frames; everything else lives here. Main thread only, except where noted.
+ * Platform-independent server side of Spectra and the implementation of the public {@link Spectra} API. Adapters
+ * forward joins, quits, and frames; everything else lives here. Main thread only, except where noted.
  */
-public final class SpectraServer implements AutoCloseable {
+public final class SpectraServer implements Spectra, AutoCloseable {
   /** Malformed frames tolerated per player before they are disconnected. */
   private static final int MAX_PROTOCOL_ERRORS = 8;
 
@@ -43,9 +44,33 @@ public final class SpectraServer implements AutoCloseable {
   private final ResourceStore store;
   private final ResourceService resources;
   private final ViewService views;
+  private final HttpService http;
+  private final SocketService sockets;
   private final Map<UUID, Integer> protocolErrors = new HashMap<>();
+  private final Map<String, DirectoryWatcher> watchers = new HashMap<>();
+  private final Resources resourceApi = new Resources() {
+    @Override
+    public Registration register(String namespace, Path directory) {
+      store.addNamespace(namespace, directory);
+      watch(namespace, directory);
+      rescanResources();
+      return () -> {
+        store.removeNamespace(namespace, directory);
+        DirectoryWatcher watcher = watchers.remove(namespace);
+        if (watcher != null) {
+          watcher.close();
+        }
+        rescanResources();
+      };
+    }
+
+    @Override
+    public void rescan() {
+      rescanResources();
+    }
+  };
   private Cancellable ticker;
-  private DirectoryWatcher resourceWatcher;
+  private boolean started;
   private CompletableFuture<Void> scanning = CompletableFuture.completedFuture(null);
   private boolean rescanRequested;
 
@@ -57,6 +82,8 @@ public final class SpectraServer implements AutoCloseable {
     this.store = new ResourceStore(platform.dataDirectory().resolve("resources"), platform.logger());
     this.resources = new ResourceService(platform, config.resourceBytesPerTick());
     this.views = new ViewService(platform, sessions, resources);
+    this.http = new HttpService(platform, views);
+    this.sockets = new SocketService(platform, views);
 
     sessions.onResolved(this::onClientResolved);
   }
@@ -88,16 +115,33 @@ public final class SpectraServer implements AutoCloseable {
     return serverId;
   }
 
+  @Override
   public ClientSessions clients() {
     return sessions;
   }
 
-  public ResourceService resources() {
-    return resources;
-  }
-
+  @Override
   public ViewService views() {
     return views;
+  }
+
+  @Override
+  public HttpService http() {
+    return http;
+  }
+
+  @Override
+  public SocketService sockets() {
+    return sockets;
+  }
+
+  @Override
+  public Resources resources() {
+    return resourceApi;
+  }
+
+  public ResourceService resourceSync() {
+    return resources;
   }
 
   public Path resourceDirectory() {
@@ -106,16 +150,23 @@ public final class SpectraServer implements AutoCloseable {
 
   /** Scans resources, starts the upload ticker, and (if configured) watches resources for changes. */
   public void start() {
+    started = true;
     ticker = platform.mainThread().runRepeating(resources::tick, 1, 1);
+    watch("", store.root());
+    store.namespaces().forEach(this::watch);
     rescanResources();
-    if (config.watchScripts()) {
-      try {
-        Files.createDirectories(store.root());
-        resourceWatcher = new DirectoryWatcher(store.root(), 150,
-            changed -> platform.mainThread().execute(this::rescanResources), platform.logger());
-      } catch (IOException e) {
-        platform.logger().log(Level.WARNING, "Could not watch resources for changes", e);
-      }
+  }
+
+  private void watch(String key, Path directory) {
+    if (!started || !config.watchScripts() || watchers.containsKey(key)) {
+      return;
+    }
+    try {
+      Files.createDirectories(directory);
+      watchers.put(key, new DirectoryWatcher(directory, 150,
+          changed -> platform.mainThread().execute(this::rescanResources), platform.logger()));
+    } catch (IOException e) {
+      platform.logger().log(Level.WARNING, "Could not watch resources in " + directory, e);
     }
   }
 
@@ -160,6 +211,8 @@ public final class SpectraServer implements AutoCloseable {
   }
 
   public void quit(UUID player) {
+    sockets.untrack(player);
+    http.untrack(player);
     sessions.quit(player);
     resources.untrack(player);
     views.untrack(player);
@@ -185,20 +238,27 @@ public final class SpectraServer implements AutoCloseable {
       }
       return;
     }
+    if (!(packet instanceof Hello) && !sessions.info(player).isSupported()) {
+      return; // Everything except the handshake requires a completed handshake.
+    }
     switch (packet) {
       case Hello hello -> sessions.handleHello(player, hello);
       case ResourceRequest request -> resources.handleRequest(player, request);
       case ResourcesSynced synced -> resources.handleSynced(player, synced);
       case ViewPost post -> views.handlePost(player, post);
       case ViewEvent event -> views.handleEvent(player, event);
+      case HttpRequest request -> http.handleRequest(player, request);
+      case HttpRequestBody body -> http.handleBody(player, body);
+      case SocketOpen open -> sockets.handleOpen(player, open);
+      case SocketSend send -> sockets.handleSend(player, send);
+      case SocketClose close -> sockets.handleClose(player, close);
     }
   }
 
   @Override
   public void close() {
-    if (resourceWatcher != null) {
-      resourceWatcher.close();
-    }
+    watchers.values().forEach(DirectoryWatcher::close);
+    watchers.clear();
     if (ticker != null) {
       ticker.cancel();
     }

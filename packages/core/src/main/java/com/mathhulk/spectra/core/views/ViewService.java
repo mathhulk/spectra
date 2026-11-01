@@ -1,18 +1,23 @@
 package com.mathhulk.spectra.core.views;
 
+import com.mathhulk.spectra.api.Registration;
+import com.mathhulk.spectra.api.clients.ClientInfo;
+import com.mathhulk.spectra.api.views.ViewKind;
+import com.mathhulk.spectra.api.views.ViewSpec;
+import com.mathhulk.spectra.api.views.Views;
 import com.mathhulk.spectra.core.Listeners;
-import com.mathhulk.spectra.core.clients.ClientInfo;
 import com.mathhulk.spectra.core.clients.ClientSessions;
-import com.mathhulk.spectra.core.platform.Cancellable;
 import com.mathhulk.spectra.core.platform.Platform;
 import com.mathhulk.spectra.core.resources.ResourceService;
 import com.mathhulk.spectra.protocol.Capability;
 import com.mathhulk.spectra.protocol.Limits;
 import com.mathhulk.spectra.protocol.Packets;
+import com.mathhulk.spectra.protocol.ResourcePath;
+import com.mathhulk.spectra.protocol.clientbound.Anchor;
 import com.mathhulk.spectra.protocol.clientbound.CloseView;
+import com.mathhulk.spectra.protocol.clientbound.Layout;
 import com.mathhulk.spectra.protocol.clientbound.OpenView;
 import com.mathhulk.spectra.protocol.clientbound.SetViewVisible;
-import com.mathhulk.spectra.protocol.clientbound.ViewKind;
 import com.mathhulk.spectra.protocol.clientbound.ViewMessage;
 import com.mathhulk.spectra.protocol.serverbound.ViewEvent;
 import com.mathhulk.spectra.protocol.serverbound.ViewPost;
@@ -21,35 +26,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Opens, updates, and closes views for players, and routes messages in both directions. Main thread only.
- *
- * <p>Views requested before a player's resources are synced are queued and sent once sync completes, so scripts
- * can open a view right after join without racing the download.
+ * Opens, updates, and closes views, and routes messages both ways. Main thread only. Views requested before a
+ * player's resources are synced are queued and sent once sync completes.
  */
-public final class ViewService {
-  /** Result of an open request. Scripts use it to decide on a fallback. */
-  public enum OpenResult {
-    /** Sent to the client. */
-    SENT,
-    /** Will be sent when the player's resources finish syncing. */
-    QUEUED,
-    /** The player's client cannot show this kind of view. */
-    UNSUPPORTED
-  }
-
-  /** A view sent JSON to the server. The JSON is untrusted input. */
-  public record Post(UUID player, String viewId, String json) {
-  }
-
-  /** A view lifecycle event reported by the client. */
-  public record Event(UUID player, String viewId, ViewEvent.Type type, String detail) {
-  }
-
+public final class ViewService implements Views {
   private static final class PlayerViews {
     final Map<String, ViewSpec> open = new LinkedHashMap<>();
     final Map<String, ViewSpec> queued = new LinkedHashMap<>();
@@ -59,38 +43,44 @@ public final class ViewService {
   private final ClientSessions sessions;
   private final ResourceService resources;
   private final Map<UUID, PlayerViews> players = new HashMap<>();
-  private final Listeners<Post> posts;
+  private final Listeners<Message> messages;
   private final Listeners<Event> events;
 
   public ViewService(Platform platform, ClientSessions sessions, ResourceService resources) {
     this.platform = platform;
     this.sessions = sessions;
     this.resources = resources;
-    this.posts = new Listeners<>(platform.logger(), "view message");
+    this.messages = new Listeners<>(platform.logger(), "view message");
     this.events = new Listeners<>(platform.logger(), "view event");
     resources.onSynced(synced -> flush(synced.player()));
   }
 
-  public Cancellable onPost(Consumer<? super Post> listener) {
-    return posts.add(listener);
+  @Override
+  public Registration onMessage(Consumer<Message> listener) {
+    return messages.add(listener);
   }
 
-  public Cancellable onEvent(Consumer<? super Event> listener) {
+  @Override
+  public Registration onEvent(Consumer<Event> listener) {
     return events.add(listener);
   }
 
-  private static String capabilityFor(ViewKind kind) {
-    return kind == ViewKind.SCREEN ? Capability.SCREENS : Capability.LAYERS;
-  }
-
-  /** True when the player's client can show views of {@code kind} right now or once synced. */
+  @Override
   public boolean supports(UUID player, ViewKind kind) {
     ClientInfo info = sessions.info(player);
-    return info.has(capabilityFor(kind)) && info.has(Capability.RESOURCES);
+    return info.has(kind == ViewKind.SCREEN ? Capability.SCREENS : Capability.LAYERS) && info.has(Capability.RESOURCES);
   }
 
+  /** True when {@code viewId} is open (sent, not merely queued) for the player. */
+  public boolean isOpen(UUID player, String viewId) {
+    PlayerViews views = players.get(player);
+    return views != null && views.open.containsKey(viewId);
+  }
+
+  @Override
   public OpenResult open(UUID player, String viewId, ViewSpec spec) {
     requireId(viewId);
+    ResourcePath.requireValid(spec.resource());
     if (!supports(player, spec.kind())) {
       return OpenResult.UNSUPPORTED;
     }
@@ -105,7 +95,12 @@ public final class ViewService {
   }
 
   private void send(UUID player, String viewId, ViewSpec spec) {
-    platform.sendFrame(player, Packets.encode(new OpenView(viewId, spec.kind(), spec.resource(), spec.layout(),
+    var layout = spec.layout();
+    platform.sendFrame(player, Packets.encode(new OpenView(viewId,
+        spec.kind() == ViewKind.SCREEN ? com.mathhulk.spectra.protocol.clientbound.ViewKind.SCREEN
+            : com.mathhulk.spectra.protocol.clientbound.ViewKind.LAYER,
+        spec.resource(),
+        new Layout(Anchor.valueOf(layout.anchor().name()), layout.x(), layout.y(), layout.width(), layout.height()),
         spec.zIndex(), spec.visible(), spec.after())));
   }
 
@@ -122,27 +117,26 @@ public final class ViewService {
     });
   }
 
+  @Override
   public boolean setVisible(UUID player, String viewId, boolean visible) {
     PlayerViews views = players.get(player);
     if (views == null) {
       return false;
     }
-    ViewSpec queued = views.queued.get(viewId);
-    if (queued != null) {
-      views.queued.put(viewId, new ViewSpec(queued.kind(), queued.resource(), queued.layout(), queued.zIndex(),
-          visible, queued.after()));
+    if (views.queued.containsKey(viewId)) {
+      views.queued.put(viewId, views.queued.get(viewId).withVisible(visible));
       return true;
     }
     ViewSpec open = views.open.get(viewId);
     if (open == null) {
       return false;
     }
-    views.open.put(viewId, new ViewSpec(open.kind(), open.resource(), open.layout(), open.zIndex(), visible,
-        open.after()));
+    views.open.put(viewId, open.withVisible(visible));
     platform.sendFrame(player, Packets.encode(new SetViewVisible(viewId, visible)));
     return true;
   }
 
+  @Override
   public boolean close(UUID player, String viewId) {
     PlayerViews views = players.get(player);
     if (views == null) {
@@ -158,7 +152,7 @@ public final class ViewService {
     return true;
   }
 
-  /** Sends JSON to one view, or to every open view when {@code viewId} is empty. */
+  @Override
   public boolean send(UUID player, String viewId, String json) {
     if (json.getBytes(StandardCharsets.UTF_8).length > Limits.MAX_CLIENTBOUND_JSON) {
       throw new IllegalArgumentException("Message exceeds " + Limits.MAX_CLIENTBOUND_JSON + " bytes");
@@ -174,7 +168,8 @@ public final class ViewService {
     return true;
   }
 
-  public Map<String, ViewSpec> openViews(UUID player) {
+  @Override
+  public Map<String, ViewSpec> open(UUID player) {
     PlayerViews views = players.get(player);
     if (views == null) {
       return Map.of();
@@ -184,16 +179,10 @@ public final class ViewService {
     return Map.copyOf(all);
   }
 
-  public Optional<ViewSpec> view(UUID player, String viewId) {
-    return Optional.ofNullable(openViews(player).get(viewId));
-  }
-
   public void handlePost(UUID player, ViewPost post) {
-    PlayerViews views = players.get(player);
-    if (views == null || !views.open.containsKey(post.viewId())) {
-      return; // Only views the server opened may talk to it.
+    if (isOpen(player, post.viewId())) {
+      messages.fire(new Message(player, post.viewId(), post.json()));
     }
-    posts.fire(new Post(player, post.viewId(), post.json()));
   }
 
   public void handleEvent(UUID player, ViewEvent event) {
@@ -204,7 +193,7 @@ public final class ViewService {
     if (event.type() == ViewEvent.Type.CLOSED || event.type() == ViewEvent.Type.FAILED) {
       views.open.remove(event.viewId());
     }
-    events.fire(new Event(player, event.viewId(), event.type(), event.detail()));
+    events.fire(new Event(player, event.viewId(), EventType.valueOf(event.type().name()), event.detail()));
   }
 
   public void untrack(UUID player) {

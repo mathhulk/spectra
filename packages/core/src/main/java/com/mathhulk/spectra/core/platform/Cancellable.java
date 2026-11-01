@@ -1,12 +1,15 @@
 package com.mathhulk.spectra.core.platform;
 
-/** Handle for a scheduled task. Cancelling twice is harmless. */
+import com.mathhulk.spectra.api.Registration;
+
+/** Handle for a scheduled task or registration. Cancelling twice is harmless. */
 @FunctionalInterface
-public interface Cancellable extends AutoCloseable {
+public interface Cancellable extends Registration {
+  @Override
   void cancel();
 
   @Override
-  default void close() {
+  default void unregister() {
     cancel();
   }
 }

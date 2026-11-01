@@ -1,5 +1,9 @@
 package com.mathhulk.spectra.core.clients;
 
+import com.mathhulk.spectra.api.Registration;
+import com.mathhulk.spectra.api.clients.ClientInfo;
+import com.mathhulk.spectra.api.clients.ClientStatus;
+import com.mathhulk.spectra.api.clients.Clients;
 import com.mathhulk.spectra.core.Listeners;
 import com.mathhulk.spectra.core.SpectraConfig;
 import com.mathhulk.spectra.core.platform.Cancellable;
@@ -7,11 +11,13 @@ import com.mathhulk.spectra.core.platform.Platform;
 import com.mathhulk.spectra.protocol.Capability;
 import com.mathhulk.spectra.protocol.Packets;
 import com.mathhulk.spectra.protocol.Protocol;
+import com.mathhulk.spectra.protocol.clientbound.NetworkPolicy;
 import com.mathhulk.spectra.protocol.clientbound.Welcome;
 import com.mathhulk.spectra.protocol.serverbound.Hello;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,13 +29,13 @@ import java.util.function.Consumer;
 /**
  * Tracks the handshake state of every online player. Main thread only.
  *
- * <p>Nothing here kicks players unless the operator enabled {@link SpectraConfig#requireClient()}. Scripts can
- * enforce support themselves with {@link #resolve(UUID)}.
+ * <p>Nothing here kicks players unless the operator enabled {@link SpectraConfig#requireClient()}; plugins and
+ * scripts enforce support themselves with {@link #resolve(UUID)}.
  */
-public final class ClientSessions {
+public final class ClientSessions implements Clients {
   /** Capabilities this server implementation supports. */
-  public static final Set<String> SERVER_CAPABILITIES =
-      Set.of(Capability.RESOURCES, Capability.SCREENS, Capability.LAYERS, Capability.MESSAGES);
+  public static final Set<String> SERVER_CAPABILITIES = Set.of(Capability.RESOURCES, Capability.SCREENS,
+      Capability.LAYERS, Capability.MESSAGES, Capability.HTTP, Capability.SOCKETS, Capability.NETWORK);
 
   private static final class Session {
     ClientInfo info;
@@ -54,14 +60,14 @@ public final class ClientSessions {
     this.resolved = new Listeners<>(platform.logger(), "client resolved");
   }
 
-  /** Fires once per join, when a player's client status becomes known (supported or not). */
-  public Cancellable onResolved(Consumer<? super ClientInfo> listener) {
+  @Override
+  public Registration onResolved(Consumer<ClientInfo> listener) {
     return resolved.add(listener);
   }
 
   public void join(UUID player) {
     quit(player);
-    Session session = new Session(ClientInfo.pending(player));
+    Session session = new Session(new ClientInfo(player, ClientStatus.PENDING, 0, Optional.empty(), Set.of()));
     session.timeout = platform.mainThread().runLater(() -> timeOut(player, session), config.handshakeTimeoutTicks());
     sessions.put(player, session);
   }
@@ -72,19 +78,16 @@ public final class ClientSessions {
       return;
     }
     session.timeout.cancel();
-    ClientInfo gone = new ClientInfo(player, ClientStatus.UNSUPPORTED, 0, Optional.empty(), Set.of());
-    session.waiting.forEach(future -> future.complete(gone));
+    session.waiting.forEach(future -> future.complete(ClientInfo.unsupported(player)));
   }
 
-  /** Current knowledge about a player; {@link ClientStatus#PENDING} until the handshake resolves. */
+  @Override
   public ClientInfo info(UUID player) {
     Session session = sessions.get(player);
-    return session == null
-        ? new ClientInfo(player, ClientStatus.UNSUPPORTED, 0, Optional.empty(), Set.of())
-        : session.info;
+    return session == null ? ClientInfo.unsupported(player) : session.info;
   }
 
-  /** Completes once the player's client status is known. Completes immediately if it already is. */
+  @Override
   public CompletableFuture<ClientInfo> resolve(UUID player) {
     Session session = sessions.get(player);
     if (session == null || session.info.isResolved()) {
@@ -103,8 +106,7 @@ public final class ClientSessions {
       session = sessions.get(player);
     }
     if (session.info.isResolved()) {
-      // Duplicate or late Hello: ignore rather than letting a client flip its own status.
-      return;
+      return; // Duplicate or late Hello: a client cannot flip its own status.
     }
     session.timeout.cancel();
 
@@ -119,15 +121,18 @@ public final class ClientSessions {
 
     platform.sendFrame(player,
         Packets.encode(new Welcome(Protocol.VERSION, true, "", serverId, SERVER_CAPABILITIES)));
-    Set<String> shared = new java.util.HashSet<>(hello.capabilities());
+    Set<String> shared = new HashSet<>(hello.capabilities());
     shared.retainAll(SERVER_CAPABILITIES);
+    if (shared.contains(Capability.NETWORK)) {
+      platform.sendFrame(player, Packets.encode(new NetworkPolicy(config.networkAllow())));
+    }
     finish(session, new ClientInfo(player, ClientStatus.SUPPORTED, hello.version(), Optional.of(hello.modVersion()),
         shared));
   }
 
   private void timeOut(UUID player, Session session) {
     if (sessions.get(player) == session && !session.info.isResolved()) {
-      finish(session, new ClientInfo(player, ClientStatus.UNSUPPORTED, 0, Optional.empty(), Set.of()));
+      finish(session, ClientInfo.unsupported(player));
     }
   }
 

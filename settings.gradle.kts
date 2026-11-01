@@ -11,8 +11,9 @@ plugins {
 
 rootProject.name = "spectra"
 
-include(":protocol", ":core", ":runtime-js", ":paper", ":fabric")
+include(":api", ":protocol", ":core", ":runtime-js", ":paper", ":fabric")
 
+project(":api").projectDir = file("packages/api")
 project(":protocol").projectDir = file("packages/protocol")
 project(":core").projectDir = file("packages/core")
 project(":runtime-js").projectDir = file("packages/runtime-js")

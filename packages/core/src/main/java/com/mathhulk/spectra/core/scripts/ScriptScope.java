@@ -1,5 +1,6 @@
 package com.mathhulk.spectra.core.scripts;
 
+import com.mathhulk.spectra.api.Registration;
 import com.mathhulk.spectra.core.platform.Cancellable;
 
 import java.util.ArrayDeque;
@@ -21,7 +22,7 @@ import java.util.logging.Logger;
 public final class ScriptScope {
   private final String scriptName;
   private final Logger logger;
-  private final Deque<Cancellable> resources = new ArrayDeque<>();
+  private final Deque<Registration> resources = new ArrayDeque<>();
   private final ReentrantLock lock = new ReentrantLock();
   private volatile boolean disposed;
 
@@ -73,15 +74,15 @@ public final class ScriptScope {
   }
 
   /** Registers a resource to release on dispose. Returns a handle that releases it early and untracks it. */
-  public Cancellable track(Cancellable resource) {
+  public Cancellable track(Registration resource) {
     if (disposed) {
-      resource.cancel();
+      resource.unregister();
       throw new IllegalStateException("Script " + scriptName + " is unloaded");
     }
     resources.push(resource);
     return () -> {
       if (resources.remove(resource)) {
-        resource.cancel();
+        resource.unregister();
       }
     };
   }
@@ -97,9 +98,9 @@ public final class ScriptScope {
       lock.unlock();
     }
     while (!resources.isEmpty()) {
-      Cancellable resource = resources.pop();
+      Registration resource = resources.pop();
       try {
-        resource.cancel();
+        resource.unregister();
       } catch (RuntimeException e) {
         logger.log(Level.WARNING, "Failed to release a resource of script " + scriptName, e);
       }

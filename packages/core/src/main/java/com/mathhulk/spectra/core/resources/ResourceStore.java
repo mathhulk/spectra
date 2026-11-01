@@ -18,7 +18,8 @@ import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /**
- * Scans a resource directory into a {@link ResourceSnapshot}. Files are only re-read and re-hashed when their
+ * Scans the resource directory, plus any directories plugins registered under a namespace, into a
+ * {@link ResourceSnapshot}. Files are only re-read and re-hashed when their
  * size or modification time changed. Not thread-safe: call {@link #scan()} from one thread at a time.
  */
 public final class ResourceStore {
@@ -29,6 +30,7 @@ public final class ResourceStore {
   }
 
   private final Path root;
+  private final Map<String, Path> namespaces = new java.util.concurrent.ConcurrentHashMap<>();
   private final Logger logger;
   private final Map<String, Cached> cache = new HashMap<>();
   private ResourceSnapshot current = ResourceSnapshot.EMPTY;
@@ -42,16 +44,69 @@ public final class ResourceStore {
     return root;
   }
 
+  /** Adds {@code directory}'s files under {@code namespace/}. Namespaces shadow same-named root folders. */
+  public void addNamespace(String namespace, Path directory) {
+    if (!namespace.matches("[a-z0-9_.\\-]{1,64}")) {
+      throw new IllegalArgumentException("Namespaces must match [a-z0-9_.-]{1,64}: " + namespace);
+    }
+    if (namespaces.putIfAbsent(namespace, directory.toAbsolutePath().normalize()) != null) {
+      throw new IllegalStateException("Resource namespace already registered: " + namespace);
+    }
+  }
+
+  public void removeNamespace(String namespace, Path directory) {
+    namespaces.remove(namespace, directory.toAbsolutePath().normalize());
+  }
+
+  public Map<String, Path> namespaces() {
+    return Map.copyOf(namespaces);
+  }
+
   public ResourceSnapshot current() {
     return current;
+  }
+
+  private void collect(Path directory, String prefix, Map<String, Path> files, java.util.Set<String> shadowed)
+      throws IOException {
+    List<Path> found;
+    try (Stream<Path> stream = Files.walk(directory)) {
+      found = stream.filter(Files::isRegularFile).sorted(Comparator.naturalOrder()).toList();
+    }
+    for (Path file : found) {
+      String relative = directory.relativize(file.toAbsolutePath().normalize()).toString()
+          .replace(file.getFileSystem().getSeparator(), "/");
+      String path = prefix + relative;
+      if (!ResourcePath.isValid(path)) {
+        logger.warning("Skipping resource with an unsupported path: " + path);
+        continue;
+      }
+      int slash = relative.indexOf('/');
+      if (slash > 0 && shadowed.contains(relative.substring(0, slash))) {
+        continue; // A plugin namespace owns this folder name.
+      }
+      files.put(path, file);
+    }
+  }
+
+  private void unusedWarning(Map<String, Path> namespaces) {
+    namespaces.forEach((name, dir) -> {
+      if (!Files.isDirectory(dir)) {
+        logger.warning("Resource namespace " + name + " points to a missing directory: " + dir);
+      }
+    });
   }
 
   /** Rescans the directory. Returns the same snapshot instance when nothing changed. */
   public ResourceSnapshot scan() throws IOException {
     Files.createDirectories(root);
-    List<Path> files;
-    try (Stream<Path> stream = Files.walk(root)) {
-      files = stream.filter(Files::isRegularFile).sorted(Comparator.naturalOrder()).toList();
+    Map<String, Path> namespaces = Map.copyOf(this.namespaces);
+    // Resource path -> file, sorted for stable manifests.
+    java.util.TreeMap<String, Path> files = new java.util.TreeMap<>();
+    collect(root, "", files, namespaces.keySet());
+    for (Map.Entry<String, Path> namespace : namespaces.entrySet()) {
+      if (Files.isDirectory(namespace.getValue())) {
+        collect(namespace.getValue(), namespace.getKey() + "/", files, java.util.Set.of());
+      }
     }
 
     Map<String, Cached> next = new HashMap<>();
@@ -59,13 +114,9 @@ public final class ResourceStore {
     Map<ResourceHash, byte[]> content = new HashMap<>();
     long total = 0;
 
-    for (Path file : files) {
-      String path = root.relativize(file.toAbsolutePath().normalize()).toString().replace(file.getFileSystem()
-          .getSeparator(), "/");
-      if (!ResourcePath.isValid(path)) {
-        logger.warning("Skipping resource with an unsupported path: " + path);
-        continue;
-      }
+    for (Map.Entry<String, Path> resource : files.entrySet()) {
+      String path = resource.getKey();
+      Path file = resource.getValue();
       BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
       long modified = attributes.lastModifiedTime().toMillis();
       Cached cached = cache.get(path);
@@ -84,6 +135,7 @@ public final class ResourceStore {
 
     cache.clear();
     cache.putAll(next);
+    unusedWarning(namespaces);
 
     if (Objects.equals(entries, current.entries())) {
       return current;

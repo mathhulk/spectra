@@ -1,21 +1,18 @@
-package com.mathhulk.spectra.core.clients;
+package com.mathhulk.spectra.api.clients;
 
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Immutable snapshot of a player's client support. This is what scripts see when they ask "does this player
- * support custom UIs?".
- */
+/** Immutable snapshot of a player's client support. */
 public record ClientInfo(UUID player, ClientStatus status, int protocolVersion, Optional<String> modVersion,
     Set<String> capabilities) {
   public ClientInfo {
     capabilities = Set.copyOf(capabilities);
   }
 
-  static ClientInfo pending(UUID player) {
-    return new ClientInfo(player, ClientStatus.PENDING, 0, Optional.empty(), Set.of());
+  public static ClientInfo unsupported(UUID player) {
+    return new ClientInfo(player, ClientStatus.UNSUPPORTED, 0, Optional.empty(), Set.of());
   }
 
   public boolean isResolved() {
