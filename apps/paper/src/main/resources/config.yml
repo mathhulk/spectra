@@ -1,0 +1,29 @@
+# Spectra configuration. Changes take effect on restart.
+
+client:
+  # Kick players who do not have the Spectra client mod. Off by default: scripts can check
+  # support per player (spectra.client(player)) and decide for themselves.
+  require: false
+  # When set, also kick clients older than this protocol version (requires `require: true`).
+  min-protocol-version: 0
+  kick-message: "This server requires the Spectra client mod."
+  # How long to wait for a client handshake before treating a player as unsupported (ticks).
+  handshake-timeout-ticks: 100
+  # Internet origins your views may contact directly (fetch, WebSocket, images), e.g. a map tile server.
+  # Views can always reach this server through fetch('/api/...'). Players can turn direct access off.
+  network-allow: []
+  #  - "https://api.example.com"
+  #  - "https://*.tiles.example.com"
+
+scripts:
+  # Reload scripts and resources automatically when their files change.
+  watch: true
+
+resources:
+  # Upload budget per player per tick, in bytes (128 KiB/tick = 2.5 MiB/s).
+  bytes-per-tick: 131072
+
+types:
+  # Generate TypeScript declarations for Paper and every installed plugin at startup, into
+  # <server>/.spectra/types/server.d.ts. spectra-sdk copies them into your project during development.
+  generate: true

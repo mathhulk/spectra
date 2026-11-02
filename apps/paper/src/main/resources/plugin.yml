@@ -1,0 +1,9 @@
+name: Spectra
+version: ${version}
+main: com.mathhulk.spectra.paper.SpectraPlugin
+api-version: "26.3"
+# Load before worlds so scripts can provide world generators and biome providers.
+load: STARTUP
+description: Server-side TypeScript/JavaScript scripting and server-driven web UIs.
+website: https://mathhulk.github.io/spectra
+authors: [mathhulk]

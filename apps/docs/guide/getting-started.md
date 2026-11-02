@@ -1,85 +1,63 @@
-# Markdown Extension Examples
+# Getting started
 
-This page demonstrates some of the built-in markdown extensions provided by VitePress.
+## Requirements
 
-## Syntax Highlighting
+- **Node.js** 20 or newer.
+- **Java 25** to run the server. Minecraft 26.1 and newer require it.
+- For server-driven UIs: **Minecraft 26.3** with Fabric, the Spectra client mod, and [Rinku](https://modrinth.com/mod/rinku) (the embedded browser).
 
-VitePress provides Syntax Highlighting powered by [Shiki](https://github.com/shikijs/shiki), with additional features like line-highlighting:
+## Create a project
 
-**Input**
+```sh
+npm create spectra@latest my-server
+cd my-server
+npm install
+```
 
-````md
-```js{4}
-export default {
-  data () {
-    return {
-      msg: 'Highlighted!'
-    }
-  }
+Set `eula: true` in `spectra.config.mjs` (after reading the [Minecraft EULA](https://aka.ms/MinecraftEULA)), then start developing:
+
+```sh
+npm run dev
+```
+
+`spectra-sdk dev` does the following:
+
+1. Downloads the Paper server you configured (checksum-verified) and the Spectra plugin.
+2. Starts the server.
+3. Bundles `src/main.ts` with esbuild in watch mode, and links the output into the server's `scripts/` folder.
+4. Copies the TypeScript types the server generated into `.spectra/types/` and keeps them updated. See [TypeScript types](/scripting/types).
+
+Save a file and the script reloads in the running server.
+
+## Project layout
+
+```
+my-server/
+├─ src/main.ts               your script
+├─ spectra.config.mjs        server type, version, Java options, build options
+├─ tsconfig.json             DOM + Node types, generated Java types
+├─ .spectra/types/           generated; do not edit or commit
+└─ .minecraft/               the development server (scripts/, plugins/Spectra/, worlds)
+```
+
+## Your first script
+
+```ts
+export function onEnable() {
+  console.log("Hello from Spectra!");
 }
-```
-````
 
-**Output**
+addCommand({ name: "hello", description: "Say hello" }, (sender) => {
+  sender.sendMessage(`Hello, ${sender.getName()}!`);
+});
 
-```js{4}
-export default {
-  data () {
-    return {
-      msg: 'Highlighted!'
-    }
-  }
-}
+addEventListener(org.bukkit.event.player.PlayerJoinEvent, (event) => {
+  event.getPlayer().sendMessage("Welcome!");
+});
 ```
 
-## Custom Containers
+## Next steps
 
-**Input**
-
-```md
-::: info
-This is an info box.
-:::
-
-::: tip
-This is a tip.
-:::
-
-::: warning
-This is a warning.
-:::
-
-::: danger
-This is a dangerous warning.
-:::
-
-::: details
-This is a details block.
-:::
-```
-
-**Output**
-
-::: info
-This is an info box.
-:::
-
-::: tip
-This is a tip.
-:::
-
-::: warning
-This is a warning.
-:::
-
-::: danger
-This is a dangerous warning.
-:::
-
-::: details
-This is a details block.
-:::
-
-## More
-
-Check out the documentation for the [full list of markdown extensions](https://vitepress.dev/guide/markdown).
+- [Scripts and lifecycle](/scripting/scripts)
+- [Events](/scripting/events), [Commands](/scripting/commands), [Timers](/scripting/timers)
+- [Server-driven UI overview](/ui/)

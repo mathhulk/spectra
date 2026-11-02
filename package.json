@@ -1,7 +1,10 @@
 {
   "name": "spectra",
   "scripts": {
-    "build": "turbo run build"
+    "build": "turbo run build && ./gradlew build",
+    "build:js": "turbo run build",
+    "build:java": "./gradlew build",
+    "test": "./gradlew test"
   },
   "packageManager": "npm@11.4.1",
   "workspaces": [

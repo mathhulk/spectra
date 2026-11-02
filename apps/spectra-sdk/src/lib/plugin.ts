@@ -77,7 +77,7 @@ const getLatestRelease = async () => {
 };
 
 const getEnvironment = () => {
-  return "bukkit";
+  return "paper";
 };
 
 const downloadPlugin = async (directory: string) => {

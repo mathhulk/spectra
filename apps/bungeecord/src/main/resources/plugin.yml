@@ -1,5 +1,0 @@
-main: com.mathhulk.spectra.SpectraBungeeCordPlugin
-name: Spectra
-version: 1.0-SNAPSHOT
-api-version: 1.21.4
-load: STARTUP

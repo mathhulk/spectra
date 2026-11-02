@@ -1,9 +1,0 @@
-main: com.mathhulk.spectra.Spectra
-name: Spectra
-version: 1.0-SNAPSHOT
-api-version: 1.21.4
-load: STARTUP
-commands:
-  scripts:
-    description: Manage Spectra scripts
-    usage: /<command>

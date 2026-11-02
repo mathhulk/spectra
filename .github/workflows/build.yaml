@@ -2,9 +2,12 @@ name: Build
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main", "nui", "nui-next"]
+  pull_request:
 
 jobs:
-  build:
+  java:
     runs-on: ubuntu-latest
 
     steps:
@@ -13,26 +16,35 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          distribution: zulu
-          java-version: 23
-          cache: maven
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: ./gradlew build
+
+      - name: Upload Paper plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: spectra-paper
+          path: apps/paper/build/libs/spectra-paper-*.jar
+
+  node:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: latest
-
-      - id: cache
-        uses: actions/cache@v4
-        with:
-          path: "**/node_modules"
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          node-version: lts/*
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
-        if: steps.cache.outputs.cache-hit != 'true'
 
       - name: Build
-        run: npm run build
+        run: npm run build:js

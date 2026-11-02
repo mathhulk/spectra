@@ -1,24 +1,24 @@
 import { defineConfig } from "vitepress";
 
-// https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: "Spectra",
-  description: "A VitePress Site",
+  description: "Minecraft server gameplay in TypeScript, and server-driven web UIs.",
   base: "/spectra/",
   lastUpdated: true,
   markdown: {
     lineNumbers: true,
   },
   themeConfig: {
-    // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: "Guide", link: "/guide/what-is-spectra" },
-      { text: "Reference", link: "/reference" },
-      { text: "Examples", link: "/examples" },
+      { text: "Scripting", link: "/scripting/scripts" },
+      { text: "UI", link: "/ui/" },
+      { text: "Java API", link: "/java/" },
+      { text: "Reference", link: "/reference/script-api" },
     ],
 
     editLink: {
-      pattern: "https://github.com/mathhulk/spectra/edit/main/apps/docs/:path",
+      pattern: "https://github.com/mathhulk/spectra/edit/nui-next/apps/docs/:path",
       text: "Edit this page on GitHub",
     },
 
@@ -26,53 +26,69 @@ export default defineConfig({
       provider: "local",
     },
 
+    outline: "deep",
+
     sidebar: [
       {
         text: "Introduction",
-        collapsed: false,
         items: [
           { text: "What is Spectra?", link: "/guide/what-is-spectra" },
           { text: "Getting started", link: "/guide/getting-started" },
+          { text: "Architecture", link: "/guide/architecture" },
+          { text: "Project status", link: "/guide/status" },
         ],
       },
       {
-        text: "SDK",
-        collapsed: false,
+        text: "Scripting",
+        items: [
+          { text: "Scripts and lifecycle", link: "/scripting/scripts" },
+          { text: "Events", link: "/scripting/events" },
+          { text: "Commands", link: "/scripting/commands" },
+          { text: "Timers", link: "/scripting/timers" },
+          { text: "World generation", link: "/scripting/world-generation" },
+          { text: "Web APIs", link: "/scripting/web-apis" },
+          { text: "Node.js compatibility", link: "/scripting/node" },
+          { text: "Java interop", link: "/scripting/java" },
+          { text: "TypeScript types", link: "/scripting/types" },
+          { text: "Performance", link: "/scripting/performance" },
+        ],
       },
       {
-        text: "Software",
-        collapsed: false,
+        text: "Server-driven UI",
         items: [
-          {
-            text: "Bukkit",
-            link: "/guide/bukkit",
-          },
-          {
-            text: "Spigot",
-            link: "/guide/spigot",
-          },
-          {
-            text: "Paper",
-            link: "/guide/paper",
-          },
-          {
-            text: "Purpur",
-            link: "/guide/purpur",
-          },
-          {
-            text: "BungeeCord",
-            link: "/guide/bungeecord",
-          },
-          {
-            text: "Velocity",
-            link: "/guide/velocity",
-          },
+          { text: "Overview", link: "/ui/" },
+          { text: "Client capabilities", link: "/ui/capabilities" },
+          { text: "Opening views", link: "/ui/views" },
+          { text: "Resources", link: "/ui/resources" },
+          { text: "Messaging", link: "/ui/messaging" },
+          { text: "HTTP and WebSockets", link: "/ui/http-and-websockets" },
+          { text: "Network access", link: "/ui/network" },
+          { text: "Game data and minimaps", link: "/ui/game-data" },
+          { text: "Client mod", link: "/ui/client" },
+          { text: "Security model", link: "/ui/security" },
+        ],
+      },
+      {
+        text: "Java API",
+        items: [
+          { text: "Overview", link: "/java/" },
+          { text: "Clients", link: "/java/clients" },
+          { text: "Views", link: "/java/views" },
+          { text: "HTTP and WebSockets", link: "/java/http" },
+          { text: "Resources", link: "/java/resources" },
+        ],
+      },
+      {
+        text: "Reference",
+        items: [
+          { text: "Script API", link: "/reference/script-api" },
+          { text: "Configuration", link: "/reference/configuration" },
+          { text: "Protocol", link: "/reference/protocol" },
+          { text: "Platforms", link: "/reference/platforms" },
         ],
       },
     ],
 
-    socialLinks: [
-      { icon: "github", link: "https://github.com/mathhulk/spectra" },
-    ],
+    socialLinks: [{ icon: "github", link: "https://github.com/mathhulk/spectra" }],
   },
 });

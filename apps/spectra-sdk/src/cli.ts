@@ -5,7 +5,8 @@ import { program } from "commander";
 import { getConfig, getType } from "./lib/config.js";
 import { runServer } from "./lib/server.js";
 import path from "path";
-import { readlink, symlink } from "fs/promises";
+import { copyFile, mkdir, readlink, symlink } from "fs/promises";
+import { existsSync, watchFile } from "fs";
 import repositories from "./lib/types/repositories.js";
 import esbuild from "esbuild";
 
@@ -76,6 +77,21 @@ program
     } catch {
       await symlink(outDir, targetPath);
     }
+
+    // The plugin generates TypeScript types for this exact server (Paper and every installed plugin) at startup;
+    // keep a copy in the project so editors see them.
+    const generatedTypes = path.resolve(directory, ".spectra", "types", "server.d.ts");
+    const projectTypes = path.resolve(process.cwd(), ".spectra", "types", "server.d.ts");
+    const syncTypes = async () => {
+      if (!existsSync(generatedTypes)) return;
+      await mkdir(path.dirname(projectTypes), { recursive: true });
+      await copyFile(generatedTypes, projectTypes);
+      console.log(`Updated types: ${path.relative(process.cwd(), projectTypes)}`);
+    };
+    watchFile(generatedTypes, { interval: 2000 }, () => {
+      syncTypes().catch((error) => console.error("Failed to copy generated types", error));
+    });
+    await syncTypes();
   });
 
 program.parse();
